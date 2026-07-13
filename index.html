@@ -3,8 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <title>SwiftSwap — Fast Automatic Crypto Exchange</title>
     <meta name="description" content="SwiftSwap is an automatic crypto exchange platform. Swap crypto to crypto, crypto to fiat, or fiat to crypto within minutes." />
+    <script>
+      // Resolve the theme before first paint so there is no flash of the wrong
+      // one. Must stay in <head>, before the module script.
+      (function () {
+        try {
+          var t = localStorage.getItem('ss_theme');
+          if (t !== 'light' && t !== 'dark') {
+            // The light palette is a placeholder; the app ships dark-only for now.
+            t = 'dark';
+          }
+          document.documentElement.classList.toggle('dark', t === 'dark');
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

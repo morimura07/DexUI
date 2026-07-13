@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { MessageCircle, X, Sparkles, Headset, Paperclip, ArrowUp, RotateCcw, Check, Ticket, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 import { API_BASE as BASE } from '../config';
@@ -386,57 +387,71 @@ export default function ChatWidget() {
     <>
       {/* Chat panel */}
       {open && (
-        <div className="fixed flex flex-col shadow-2xl overflow-hidden border border-border"
+        <div className="fixed flex flex-col overflow-hidden rounded-2xl bg-bg2/70 shadow-[0_24px_70px_rgba(0,0,0,0.35),inset_0_1px_0_0_rgba(255,255,255,0.08)] backdrop-blur-2xl backdrop-saturate-150"
           style={{
-            background: '#0B0E11',
             zIndex: 99999,
-            borderRadius: '16px',
             // Mobile: near full width, sits above FAB
-            bottom: '76px',
+            bottom: '84px',
             // Align to the centered 1400px content edge on wide screens (matches FAB).
             right: 'max(12px, calc((100vw - 1400px) / 2 + 12px))',
             left: '12px',
             // Hug content; cap so it never gets lengthy or taller than the viewport
-            maxHeight: 'min(70vh, 460px)',
+            maxHeight: 'min(72vh, 520px)',
             // Desktop: fixed width on right
-            maxWidth: '340px',
+            maxWidth: '360px',
             marginLeft: 'auto',
           }}>
 
-          {/* Header */}
-          <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border shrink-0"
-            style={{ background:'#1E2329' }}>
-            <div className="flex items-center gap-2.5">
+          {/* Optical glass rim — a 1px gradient border that's bright where light
+              catches the top edge and picks up a brand tint toward the base. The
+              double-mask keeps only the padding ring, leaving the fill untouched. */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-20 rounded-2xl"
+            style={{
+              padding: '1px',
+              background: 'linear-gradient(180deg, color-mix(in oklab, var(--fg) 30%, transparent) 0%, color-mix(in oklab, var(--fg) 7%, transparent) 42%, color-mix(in oklab, var(--brand-fg) 20%, transparent) 100%)',
+              WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+              WebkitMaskComposite: 'xor',
+              maskComposite: 'exclude',
+            }} />
+
+          {/* Header — frosted brand band */}
+          <div className="relative flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3 text-white"
+            style={{ background: 'linear-gradient(135deg, color-mix(in oklab, var(--brand) 88%, transparent), color-mix(in oklab, var(--brand-h) 88%, transparent))' }}>
+            <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="w-8 h-8 rounded-full bg-yellow/10 border border-yellow/20 flex items-center justify-center text-[15px]">
-                  {handedOff ? '👤' : '⚡'}
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
+                  {handedOff ? <Headset className="h-[18px] w-[18px]" /> : <Sparkles className="h-[18px] w-[18px]" />}
                 </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green border-2 border-bg2" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green ring-2 ring-brand" />
               </div>
-              <div>
-                <div className="font-bold text-[12px]">{handedOff ? 'Support Agent' : 'SwiftBot'}</div>
-                <div className="text-[10px] text-muted">
-                  {handedOff ? (lastReply ? '✅ Agent connected' : '⏳ Connecting...') : 'Online • AI Assistant'}
+              <div className="leading-tight">
+                <div className="text-sm font-semibold">{handedOff ? 'Support Agent' : 'SwiftBot'}</div>
+                <div className="flex items-center gap-1.5 text-[11px] text-white/80">
+                  {handedOff
+                    ? (lastReply ? 'Agent connected' : 'Connecting…')
+                    : <><span className="h-1.5 w-1.5 rounded-full bg-green" /> AI Assistant · Online</>}
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {handedOff && (
-                <button onClick={reset} className="text-[10px] text-muted hover:text-white cursor-pointer bg-transparent border-none">
+                <button onClick={reset} className="rounded-lg px-2 py-1 text-[11px] text-white/80 transition-colors hover:bg-white/15 hover:text-white">
                   New chat
                 </button>
               )}
-              <button onClick={() => setOpen(false)}
-                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-bg3 text-muted hover:text-white cursor-pointer bg-transparent border-none">✕</button>
+              <button onClick={() => setOpen(false)} aria-label="Close chat"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/15 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 min-h-0 space-y-2.5 overflow-y-auto p-3">
             {msgs.map((m, i) => {
               if (m.role === 'system') return (
                 <div key={i} className="flex justify-center">
-                  <span className="text-[10px] text-muted bg-bg3 px-3 py-1 rounded-full border border-border">{m.content}</span>
+                  <span className="rounded-full border border-fg/10 bg-fg/5 px-3 py-1 text-center text-[10px] text-muted backdrop-blur-sm">{m.content}</span>
                 </div>
               );
               const isUser  = m.role === 'user';
@@ -444,21 +459,21 @@ export default function ChatWidget() {
               return (
                 <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                   {!isUser && (
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] shrink-0 mr-2 mt-0.5 border
-                      ${isAgent ? 'bg-blue-500/10 border-blue-500/20' : 'bg-yellow/10 border-yellow/20'}`}>
-                      {isAgent ? '👤' : '⚡'}
+                    <div className={`mr-2 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full backdrop-blur-sm
+                      ${isAgent ? 'bg-info/15 text-info' : 'bg-brand/15 text-brand-fg'}`}>
+                      {isAgent ? <Headset className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
                     </div>
                   )}
-                  <div className={`max-w-[82%] px-3 py-2 rounded-2xl text-[11.5px] leading-relaxed
+                  <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-[11.5px] leading-relaxed
                     ${isUser
-                      ? 'bg-yellow text-black rounded-br-sm font-medium'
+                      ? 'rounded-br-sm bg-brand font-medium text-white shadow-sm'
                       : isAgent
-                        ? 'bg-blue-500/10 border border-blue-500/20 text-white rounded-bl-sm'
-                        : 'bg-bg2 border border-border text-white rounded-bl-sm'}`}>
-                    {isAgent && <div className="text-[9px] text-blue-400 font-semibold mb-1">Support Agent</div>}
+                        ? 'rounded-bl-sm border border-info/25 bg-info/10 text-fg backdrop-blur-sm'
+                        : 'rounded-bl-sm border border-fg/10 bg-fg/[0.06] text-fg backdrop-blur-sm'}`}>
+                    {isAgent && <div className="mb-1 text-[9px] font-semibold text-info">Support Agent</div>}
                     {(m.content && typeof m.content === 'object' && m.content.type === 'image')
                       ? <img src={m.content.url} alt="screenshot"
-                          className="rounded-lg max-w-full max-h-48 object-contain cursor-pointer"
+                          className="max-h-48 max-w-full cursor-pointer rounded-lg object-contain"
                           onClick={() => window.open(m.content.url, '_blank')} />
                       : m.content}
                   </div>
@@ -467,8 +482,8 @@ export default function ChatWidget() {
             })}
             {loading && (
               <div className="flex justify-start">
-                <div className="w-6 h-6 rounded-full bg-yellow/10 border border-yellow/20 flex items-center justify-center text-[10px] shrink-0 mr-2 mt-0.5">⚡</div>
-                <div className="bg-bg2 border border-border rounded-2xl rounded-bl-sm"><Dots /></div>
+                <div className="mr-2 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/15 text-brand-fg backdrop-blur-sm"><Sparkles className="h-3.5 w-3.5" /></div>
+                <div className="rounded-2xl rounded-bl-sm border border-fg/10 bg-fg/[0.06] backdrop-blur-sm"><Dots /></div>
               </div>
             )}
             <div ref={bottomRef} />
@@ -476,10 +491,10 @@ export default function ChatWidget() {
 
           {/* Quick questions - only on first message */}
           {msgs.length === 1 && !loading && (
-            <div className="px-3 pb-2 flex flex-wrap gap-1.5 shrink-0">
+            <div className="flex shrink-0 flex-wrap gap-1.5 px-3 pb-2">
               {QUICK.map((q,i) => (
                 <button key={i} onClick={() => send(q)}
-                  className="text-[10px] px-2.5 py-1 bg-bg2 border border-border rounded-full text-muted hover:border-yellow hover:text-yellow transition-colors cursor-pointer">
+                  className="rounded-full border border-fg/10 bg-fg/5 px-2.5 py-1 text-[10px] text-muted backdrop-blur-sm transition-colors hover:border-brand hover:text-brand-fg">
                   {q}
                 </button>
               ))}
@@ -488,25 +503,25 @@ export default function ChatWidget() {
 
           {/* Request a refund — available when not already in a flow or handed off */}
           {!handedOff && !refundFlow && !fiatFlow && !loading && (
-            <div className="px-3 pb-2 shrink-0">
+            <div className="shrink-0 px-3 pb-2">
               <button onClick={startRefund}
-                className="text-[10px] px-2.5 py-1 bg-bg2 border border-border rounded-full text-muted hover:border-yellow hover:text-yellow transition-colors cursor-pointer">
-                💸 Request a refund
+                className="inline-flex items-center gap-1.5 rounded-full border border-fg/10 bg-fg/5 px-2.5 py-1 text-[10px] text-muted backdrop-blur-sm transition-colors hover:border-brand hover:text-brand-fg">
+                <RotateCcw className="h-3 w-3" /> Request a refund
               </button>
             </div>
           )}
 
           {/* Fiat: I have paid — appears once the operator shares payment details */}
           {fiatFlow?.orderId && (lastReply || msgs.some(m => m.role === 'agent')) && (
-            <div className="px-3 pb-2 shrink-0">
+            <div className="shrink-0 px-3 pb-2">
               {!fiatPaid ? (
                 <button onClick={markFiatPaid}
-                  className="w-full py-2.5 bg-yellow text-black font-extrabold text-[12.5px] rounded-xl hover:bg-yellow-d transition-colors cursor-pointer border-none">
-                  ✓ I have paid
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand py-2.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-brand-h">
+                  <Check className="h-4 w-4" /> I have paid
                 </button>
               ) : (
-                <div className="w-full py-2 text-center text-[11px] text-green bg-green/10 border border-green/20 rounded-xl">
-                  ✅ Payment submitted — under review
+                <div className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-green/20 bg-green/10 py-2 text-[11px] text-green">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Payment submitted — under review
                 </div>
               )}
             </div>
@@ -514,33 +529,33 @@ export default function ChatWidget() {
 
           {/* Active ticket badge */}
           {ticketId && (
-            <div className="px-4 py-1.5 bg-blue-500/5 border-t border-blue-500/10 flex items-center justify-between shrink-0">
-              <span className="text-[10px] text-blue-400">Ticket: <strong>{ticketId}</strong></span>
-              <span className="text-[9px] text-muted">Agent notified via Telegram</span>
+            <div className="flex shrink-0 items-center justify-between border-t border-info/10 bg-info/5 px-4 py-1.5">
+              <span className="flex items-center gap-1.5 text-[10px] text-info"><Ticket className="h-3 w-3" /> Ticket <strong>{ticketId}</strong></span>
+              <span className="text-[9px] text-muted">Agent notified</span>
             </div>
           )}
 
           {/* Input */}
-          <div className="px-3 pb-3 pt-2.5 shrink-0 border-t border-border" style={{ background:'#1E2329' }}>
-            <div className="flex items-center gap-2 bg-bg border border-border rounded-xl px-3 py-2 focus-within:border-yellow transition-colors">
+          <div className="shrink-0 border-t border-fg/10 px-3 pb-3 pt-2.5">
+            <div className="flex items-center gap-1.5 rounded-xl border border-fg/10 bg-fg/5 px-2 py-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-sm transition-colors focus-within:border-brand">
               {/* Hidden file input for screenshots */}
               <input ref={fileRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
               <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                title="Send a screenshot"
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:text-yellow cursor-pointer disabled:opacity-40 shrink-0 border-none bg-transparent text-[15px]">
-                {uploading ? '⏳' : '📎'}
+                title="Send a screenshot" aria-label="Send a screenshot"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:text-brand-fg disabled:opacity-40">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
               </button>
               <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key==='Enter' && !e.shiftKey && send()}
-                placeholder={handedOff ? 'Message will be noted for agent...' : 'Ask SwiftBot...'}
-                className="flex-1 bg-transparent text-[12px] text-white outline-none placeholder-muted" />
-              <button onClick={() => send()} disabled={!input.trim() || loading}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-yellow text-black cursor-pointer disabled:opacity-40 shrink-0 border-none text-[14px]">
-                ↑
+                placeholder={handedOff ? 'Message will be noted for agent…' : 'Ask SwiftBot…'}
+                className="flex-1 bg-transparent text-[12px] text-fg outline-none placeholder:text-subtle" />
+              <button onClick={() => send()} disabled={!input.trim() || loading} aria-label="Send message"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand-h disabled:opacity-40">
+                <ArrowUp className="h-4 w-4" />
               </button>
             </div>
-            <div className="text-[9px] text-muted text-center mt-1.5">
-              Powered by Groq AI · <a href="/contacts" className="text-yellow hover:underline">Contact support</a>
+            <div className="mt-1.5 flex items-center justify-center gap-1 text-[9px] text-subtle">
+              <Sparkles className="h-2.5 w-2.5" /> Powered by Groq AI · <a href="/contacts" className="text-brand-fg hover:underline">Contact support</a>
             </div>
           </div>
         </div>
@@ -548,38 +563,33 @@ export default function ChatWidget() {
 
       {/* FAB button */}
       <button onClick={() => setOpen(o => !o)}
+        aria-label={open ? 'Close chat' : 'Open chat'}
+        className="group fixed z-[99999] flex h-14 w-14 items-center justify-center rounded-full text-white ring-1 ring-inset ring-white/25 transition-transform duration-150 hover:scale-105 active:scale-95"
         style={{
-          position: 'fixed',
           bottom: '16px',
           // Track the centered 1400px content edge on wide screens instead of the
           // viewport edge; stays 16px from the edge below 1400px (mobile/tablet).
           right: 'max(16px, calc((100vw - 1400px) / 2 + 16px))',
-          width: '52px',
-          height: '52px',
-          borderRadius: '50%',
-          zIndex: 99999,
-          background: open ? '#2B3139' : '#F0B90B',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-          transition: 'transform 0.15s, background 0.15s',
+          background: open ? 'color-mix(in oklab, var(--surface-3) 80%, transparent)' : 'linear-gradient(135deg, var(--brand), var(--brand-h))',
+          backdropFilter: open ? 'blur(12px)' : 'none',
+          boxShadow: open ? '0 6px 20px rgba(0,0,0,0.25)' : '0 10px 30px rgba(81,0,253,0.45)',
         }}>
-        <span style={{ fontSize: open ? '18px' : '22px', color: open ? 'white' : 'black' }}>
-          {open ? '✕' : '💬'}
-        </span>
+        {open
+          ? <X className="h-5 w-5 text-fg" />
+          : <MessageCircle className="h-6 w-6" />}
+
+        {/* Online pulse (closed, no unread) */}
+        {!open && unread === 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-60" />
+            <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-green ring-2 ring-bg" />
+          </span>
+        )}
+        {/* Unread badge */}
         {!open && unread > 0 && (
-          <div style={{
-            position: 'absolute', top: '-4px', right: '-4px',
-            width: '20px', height: '20px', borderRadius: '50%',
-            background: '#CF304A', color: 'white',
-            fontSize: '10px', fontWeight: 'bold',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red px-1 text-[10px] font-bold text-white ring-2 ring-bg">
             {unread}
-          </div>
+          </span>
         )}
       </button>
     </>

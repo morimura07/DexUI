@@ -1,8 +1,9 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import Navbar from './components/Navbar';
+import { Navbar } from './components/landing/navbar';
 import { Footer, ProtectedRoute } from './components/Common';
-import Overview from './pages/Overview';
+import { PageTransition } from './lib/motion';
 import News from './pages/News';
 import { Rules, Kyc } from './pages/StaticPages';
 import Contacts from './pages/Contacts';
@@ -10,16 +11,29 @@ import About from './pages/About';
 import Exchange from './pages/Exchange';
 import { Login, Register, ForgotPassword, ResetPassword, VerifyEmail } from './pages/AuthPages';
 import { OrderPage, MyOrders, Profile, Affiliate } from './pages/UserPages';
-import AdminPanel from './admin/AdminApp';
 import ChatWidget from './components/ChatWidget';
+
+// Split out the two heaviest, least-shared routes. Landing drags in motion and
+// lenis; the admin panel is a whole second app. Neither belongs in the chunk
+// that /login downloads.
+const Landing = lazy(() => import('./pages/Landing'));
+const AdminPanel = lazy(() => import('./admin/AdminApp'));
+
+function RouteFallback() {
+  return <div className="min-h-screen bg-bg" />;
+}
 
 function MainLayout({ children }) {
   const { pathname } = useLocation();
   const hideFooter = ['/login','/register','/forgot-password','/reset-password','/verify-email'].includes(pathname);
   return (
-    <div className="min-h-screen flex flex-col" style={{maxWidth:'1400px', margin:'0 auto', width:'100%'}}>
+    <div className="min-h-screen flex flex-col w-full ">
       <Navbar />
-      <main className="flex-1">{children}</main>
+      {/* The unified navbar is a fixed floating pill, so content needs clearance.
+          Keying the transition on pathname replays a refined enter on each route. */}
+      <main className="flex-1 pt-28">
+        <PageTransition key={pathname}>{children}</PageTransition>
+      </main>
       {!hideFooter && <Footer />}
       <ChatWidget />
     </div>
@@ -30,13 +44,16 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           {/* Admin — full screen, no navbar/footer, stays at /admin */}
           <Route path="/admin" element={<AdminPanel />} />
 
+          {/* Landing — full-bleed, ships its own navbar and chat widget */}
+          <Route path="/" element={<Navigate to="/overview" replace />} />
+          <Route path="/overview" element={<Landing />} />
+
           {/* Main site */}
-          <Route path="/" element={<MainLayout><Navigate to="/overview" replace /></MainLayout>} />
-          <Route path="/overview"  element={<MainLayout><Overview /></MainLayout>} />
           <Route path="/news"      element={<MainLayout><News /></MainLayout>} />
           <Route path="/rules"     element={<MainLayout><Rules /></MainLayout>} />
           <Route path="/kyc"       element={<MainLayout><Kyc /></MainLayout>} />
@@ -53,6 +70,7 @@ export default function App() {
           <Route path="/profile"   element={<MainLayout><ProtectedRoute><Profile /></ProtectedRoute></MainLayout>} />
           <Route path="/affiliate" element={<MainLayout><ProtectedRoute><Affiliate /></ProtectedRoute></MainLayout>} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

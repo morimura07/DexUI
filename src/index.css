@@ -1,18 +1,171 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* `dark:` variants follow the .dark class on <html>, not the OS media query,
+   because the theme toggle owns that class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Raw theme tokens. This is the ONLY place a color literal lives.
+
+   Every value MUST be a complete CSS color (hex / oklch / rgb) — never bare
+   channels like `81 0 253`. Tailwind compiles `bg-brand/10` to
+   `color-mix(in oklab, var(--brand) 10%, transparent)`, which silently yields
+   nothing if the var isn't a real color. That would blank every tinted surface
+   in the app.
+
+   `:root` is the light theme, `.dark` the dark theme. Both are designed and live.
+
+   Elevation model (mirrors dark, inverted): surface-0 is the page background and
+   also recessed insets (inputs); surface-1 is white — cards/panels float above
+   the page; surface-2/3 are progressively stronger grays for hover, chips, and
+   table headers. So a gray input (surface-0) inside a white panel (surface-1)
+   reads as recessed, exactly as a near-black input inside a dark-gray panel does
+   in dark mode.
+   ──────────────────────────────────────────────────────────────────────────── */
+:root {
+  --surface-0: #f6f7f9;   /* page background + recessed insets */
+  --surface-1: #ffffff;   /* cards / panels — elevated */
+  --surface-2: #edeff3;   /* hover, chips, table header */
+  --surface-3: #e0e4ea;   /* stronger fills / active hover */
+
+  --fg: #191b1f;          /* primary text — near-black, not pure */
+  --fg-muted: #565c66;    /* secondary text */
+  --fg-subtle: #6a717b;   /* labels / tertiary */
+
+  --brand: #5100fd;       /* brand fill (white text on it) */
+  --brand-h: #4400cc;     /* hover darkens on light */
+  --brand-fg: #5a17e6;    /* brand as text/icon on light surfaces */
+
+  --success: #0a7d55;
+  --danger: #c31d40;
+  --warn: #b45309;
+  --info: #2563eb;        /* review / processing status */
+  --hold: #c2410c;        /* AML hold status */
+
+  --line: #e3e6ea;        /* subtle borders */
+  --ring: #5100fd;
+
+  --scroll-track: #edeff3;
+  --scroll-thumb: #c3c8d0;
+}
+
+.dark {
+  --surface-0: #000000;
+  --surface-1: #0f0f11;
+  --surface-2: #1c1c1f;
+  --surface-3: #2a2a2e;
+
+  --fg: #EAECEF;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
+
+  --brand: #5100fd;
+  --brand-h: #6610ff;
+  --brand-fg: #a78bfa;
+
+  --success: #03A66D;
+  --danger: #CF304A;
+  --warn: #F0B90B;
+  --info: #60a5fa;
+  --hold: #fb923c;
+
+  --line: #27272a;
+  --ring: #5100fd;
+
+  --scroll-track: #0f0f11;
+  --scroll-thumb: #2a2a2e;
+}
+
+/* Non-color theme values. Plain `@theme` (not inline) so `--font-sans` is
+   emitted as a real custom property that the base layer can read. */
+@theme {
+  --font-sans: 'Inter', sans-serif;
+
+  /* Marketing content column and the main-site shell width. */
+  --container-content: 1200px;
+  --container-shell: 1400px;
+}
+
+/* Color tokens. `inline` resolves straight to the raw var, so utilities read
+   `var(--brand)` directly and flip with `.dark` at point of use.
+   NOTE: @theme MERGES with Tailwind's default palette. Never reset it with an
+   `initial` wildcard, or the zinc scale, white and black (used ~120x) vanish. */
+@theme inline {
+  --color-bg: var(--surface-0);
+  --color-bg2: var(--surface-1);
+  --color-bg3: var(--surface-2);
+  --color-bg4: var(--surface-3);
+
+  --color-fg: var(--fg);
+  --color-surface: var(--surface-0);
+  --color-muted: var(--fg-muted);
+  --color-subtle: var(--fg-subtle);
+
+  --color-brand: var(--brand);
+  --color-brand-h: var(--brand-h);
+  --color-brand-fg: var(--brand-fg);
+
+  --color-green: var(--success);
+  --color-red: var(--danger);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-hold: var(--hold);
+  --color-border: var(--line);
+
+  /* shadcn primitives (button, tabs, accordion) — unified onto the same raw
+     vars rather than a duplicate parallel set. */
+  --color-background: var(--surface-0);
+  --color-foreground: var(--fg);
+  --color-primary: var(--brand);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--fg);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--fg);
+  --color-muted-foreground: var(--fg-muted);
+  --color-destructive: var(--danger);
+  --color-input: var(--line);
+  --color-ring: var(--ring);
+}
 
 @layer base {
+  /* Tailwind v4 preflight resolves a bare `border` to currentColor; v3 gave
+     gray-200. Nothing relies on the old default, but a themed fallback keeps
+     future bare `border` usages from inheriting text color. */
+  *, ::before, ::after { border-color: var(--line); }
+
   * { box-sizing: border-box; }
-  html { overflow-x: clip; scroll-behavior: smooth; background-color: #0B0E11; font-size: 16px; }
-  body { overflow-x: clip; font-family: 'Inter', sans-serif; background-color: #0B0E11; color: #EAECEF; min-height: 100vh; display: flex; justify-content: center; }
-  #root { width: 100%; max-width: 1400px; min-height: 100vh; display: flex; flex-direction: column; }
+
+  html {
+    overflow-x: clip;
+    scroll-behavior: smooth;
+    background-color: var(--surface-0);
+    font-size: 16px;
+    color-scheme: light;
+  }
+  html.dark { color-scheme: dark; }
+
+  body {
+    overflow-x: clip;
+    font-family: var(--font-sans);
+    background-color: var(--surface-0);
+    color: var(--fg);
+    min-height: 100vh;
+  }
+
+  /* No max-width here: the landing is full-bleed. MainLayout and the admin
+     shell cap their own width. */
+  #root {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 @layer utilities {
-  /* Ticker animation */
+  /* Ticker / marquee */
   .animate-ticker { animation: ticker 55s linear infinite; }
   @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
@@ -26,12 +179,117 @@
   .bar-open-2 { opacity: 0; transform: scaleX(0); }
   .bar-open-3 { transform: translateY(-7px) rotate(-45deg); }
 
-  /* Custom scrollbar */
+  /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: #1E2329; }
-  ::-webkit-scrollbar-thumb { background: #363D45; border-radius: 3px; }
+  ::-webkit-scrollbar-track { background: var(--scroll-track); }
+  ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 3px; }
 
   /* Drawer slide */
   .drawer-enter { transform: translateX(100%); }
   .drawer-open  { transform: translateX(0); }
+
+  /* ── Landing ─────────────────────────────────────────────────── */
+
+  .bg-lines-container {
+    position: fixed;
+    inset: 0%;
+    z-index: -3;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  @media screen and (max-width: 991px) {
+    .bg-lines-container { display: block; transform: scale(1.125); }
+  }
+  @media screen and (max-width: 767px) {
+    .bg-lines-container { transform: scale(1.05); }
+  }
+  @media screen and (max-width: 479px) {
+    .bg-lines-container { transform: scale(1.8); }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes line-race {
+    from { stroke-dashoffset: 0px; }
+    to   { stroke-dashoffset: -3000px; }
+  }
+
+  /* Hero rate-lock ring. The arc DRAINS (offset grows), which reads as a
+     countdown rather than as progress. */
+  @keyframes lock-sweep {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: var(--ring-circumference); }
+  }
+
+  .animate-line-race-1 { animation: line-race 1.6s ease-in-out infinite; }
+  .animate-line-race-2 { animation: line-race 1.2s ease-in-out infinite; }
+  .animate-line-race-3 { animation: line-race 2s   ease-in-out infinite; }
+  .animate-line-race-4 { animation: line-race 1s   ease-in-out infinite; }
+
+  .animate-lock-sweep { animation: lock-sweep 12s linear infinite; }
+
+  .animate-fade-in    { animation: fade-in 0.8s ease-out forwards; }
+  .animate-fade-in-up { animation: fade-in-up 0.8s ease-out forwards; }
+
+  .animation-delay-200 { animation-delay: 0.2s; opacity: 0; }
+  .animation-delay-400 { animation-delay: 0.4s; opacity: 0; }
+
+  /* Auth (Login/Sign-up) forms run one step smaller than the shared kit for a
+     tighter, more refined card. Scoped to `.auth-scale` so Field/Input/Button
+     stay their normal size everywhere else (Contacts, Exchange, …). */
+  .auth-scale form { gap: 0.75rem; }
+  .auth-scale label { font-size: 0.75rem; }
+  .auth-scale :is(input, textarea) { font-size: 0.8125rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  .auth-scale button[type='submit'] { font-size: 0.8125rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  /* Helper text below the form (sign-up / back links) shrinks as one block so
+     text and its inline links stay the same size. */
+  .auth-scale form ~ div { font-size: 0.8125rem; }
+
+  /* Skeleton shimmer — a soft light sweep over loading placeholders. Add
+     `shimmer` alongside the placeholder's own bg (replaces the flat pulse). */
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+  .shimmer { position: relative; overflow: hidden; }
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--fg) 8%, transparent), transparent);
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* Reduced motion.
+     The opacity resets are MANDATORY, not cosmetic: .animation-delay-* set
+     opacity:0 and rely on the animation to reveal their content. Killing the
+     animation without restoring opacity leaves that content invisible. */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-ticker,
+    .animate-fade-in,
+    .animate-fade-in-up,
+    .animate-lock-sweep,
+    .animate-line-race-1,
+    .animate-line-race-2,
+    .animate-line-race-3,
+    .animate-line-race-4 {
+      animation: none !important;
+    }
+    .animation-delay-200,
+    .animation-delay-400,
+    .animate-fade-in,
+    .animate-fade-in-up {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .shimmer::after { animation: none !important; }
+    html { scroll-behavior: auto; }
+  }
 }

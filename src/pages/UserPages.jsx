@@ -1,28 +1,36 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { MessageCircle, Search, Loader2, CheckCircle2, Clock, XCircle, Check, ArrowLeft, ArrowRight, RefreshCw, ClipboardList, Copy, Share2, Wallet, Repeat } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { Panel, Button, SectionLabel, RingAccent } from '../components/ui/kit';
+import { useT } from '../lib/i18n';
+import { Reveal, RevealGroup, RevealItem, motion, lift, CountUp } from '../lib/motion';
 
 // DB sends timestamps as "YYYY-MM-DD HH:MM:SS" (space, no TZ). Browsers may parse that
 // as an Invalid Date, which caused orders to show "Expired" instantly. Normalise to ISO.
 const parseTs = d => new Date(String(d || '').replace(' ', 'T'));
 
 const badgeClass = s => ({
-  WAIT_PAYMENT:'bg-yellow/10 text-yellow', PAYMENT_RECEIVED:'bg-blue-500/10 text-blue-400',
-  UNDER_REVIEW:'bg-blue-500/10 text-blue-400',
-  PROCESSING:'bg-blue-500/10 text-blue-400', COMPLETED:'bg-green/10 text-green',
+  WAIT_PAYMENT:'bg-brand/10 text-brand-fg', PAYMENT_RECEIVED:'bg-info/10 text-info',
+  UNDER_REVIEW:'bg-info/10 text-info',
+  PROCESSING:'bg-info/10 text-info', COMPLETED:'bg-green/10 text-green',
   EXPIRED:'bg-red/10 text-red', CANCELLED:'bg-red/10 text-red',
-  AML_HOLD:'bg-orange-500/10 text-orange-400', REFUNDED:'bg-bg3 text-muted',
+  AML_HOLD:'bg-hold/10 text-hold', REFUNDED:'bg-bg3 text-muted',
 }[s]||'bg-bg3 text-muted');
 
-const Badge = ({status}) => (
-  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${badgeClass(status)}`}>
-    <span className="w-1.5 h-1.5 rounded-full bg-current" />{status?.replace(/_/g,' ')}
-  </span>
-);
+const Badge = ({status}) => {
+  const t = useT();
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${badgeClass(status)}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />{status ? t(`myOrders.badge.${status}`) : ''}
+    </span>
+  );
+};
 
 // ── ORDER PAGE ──
 export function OrderPage() {
+  const t = useT();
   const { orderId } = useParams();
   const navigate    = useNavigate();
   const { isLoggedIn, loading: authLoading } = useAuth();
@@ -50,7 +58,7 @@ export function OrderPage() {
     if (!isLoggedIn) return;
     const fetchOrder = async () => {
       const res = await api.getOrder(orderId);
-      if (res.success) {
+      if (res.success && res.data?.order) {
         const o = res.data.order;
         setOrder(o);
         // Set timer from real expires_at. DB sends "YYYY-MM-DD HH:MM:SS" (space, no TZ);
@@ -113,16 +121,16 @@ export function OrderPage() {
   const payAddress  = order?.payment?.address || '';
 
   if (authLoading || (loading && !prefill)) return (
-    <div className="flex items-center justify-center min-h-[60vh] text-muted text-sm">
+    <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted">
       <div className="text-center">
-        <div className="text-2xl animate-pulse mb-3">⏳</div>
-        Loading order…
+        <Loader2 className="mx-auto mb-3 h-7 w-7 animate-spin text-brand-fg" />
+        {t('order.loadingOrder')}
       </div>
     </div>
   );
   if (!loading && !order && !prefill) return (
-    <div className="flex items-center justify-center min-h-[60vh] text-muted text-sm">
-      Order not found. <Link to="/about" className="text-yellow ml-1">Create new order</Link>
+    <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted">
+      {t('order.notFound')} <Link to="/about" className="ml-1 text-brand-fg">{t('order.createNewOrder')}</Link>
     </div>
   );
 
@@ -140,92 +148,81 @@ export function OrderPage() {
     || symU.includes('UAH')                    // CARDUAH, etc.
     || FIAT_NAME_HINTS.some(h => nameU.includes(h));
 
-  const TELEGRAM_URL = 'https://t.me/SwiftSwapSupport';
+  const statusHeading = () => {
+    const s = order?.status;
+    if (s === 'WAIT_PAYMENT') return [t('order.status.waitingForPayment'), 'text-brand-fg'];
+    if (['PAYMENT_RECEIVED','UNDER_REVIEW'].includes(s)) return [t('order.status.underReview'), 'text-info'];
+    if (s === 'PROCESSING') return [t('order.status.processing'), 'text-info'];
+    if (s === 'COMPLETED') return [t('order.status.completed'), 'text-green'];
+    if (s === 'EXPIRED') return [t('order.status.expired'), 'text-red'];
+    if (s === 'CANCELLED') return [t('order.status.cancelled'), 'text-red'];
+    return [t('order.status.new'), 'text-brand-fg'];
+  };
+  const [statusWord, statusTone] = statusHeading();
 
-  const Row = ({k,v,mono=false}) => (
-    <div className="flex justify-between items-center py-2.5 border-b border-border last:border-0 gap-4">
-      <span className="text-[11.5px] text-muted shrink-0">{k}</span>
-      <span className={`text-[13px] font-semibold text-right ${mono?'font-mono text-[11px] break-all':''}`}>{v}</span>
+  const Row = ({ k, v, tone = '', mono = false }) => (
+    <div className="py-2.5">
+      <div className="text-xs text-subtle">{k}</div>
+      <div className={`mt-0.5 font-semibold ${mono ? 'break-all font-mono text-xs' : 'text-sm'} ${tone}`}>{v}</div>
     </div>
   );
 
   return (
-    <div className="px-4 md:px-6 py-6 lg:pr-[400px]">
-     <div className="max-w-4xl mx-auto">
-
-      <div className="text-center mb-4">
-        {order?.status === 'WAIT_PAYMENT' && <h1 className="text-[22px] font-extrabold">Exchange <span className="text-yellow">waiting for payment</span></h1>}
-        {['PAYMENT_RECEIVED','UNDER_REVIEW'].includes(order?.status||'') && <h1 className="text-[22px] font-extrabold">Exchange <span className="text-blue-400">under review</span></h1>}
-        {order?.status === 'PROCESSING' && <h1 className="text-[22px] font-extrabold">Exchange <span className="text-blue-400">processing</span></h1>}
-        {order?.status === 'COMPLETED' && <h1 className="text-[22px] font-extrabold">Exchange <span className="text-green">completed</span></h1>}
-        {['EXPIRED','CANCELLED'].includes(order?.status||'') && <h1 className="text-[22px] font-extrabold">Exchange <span className="text-red">{order?.status?.toLowerCase()}</span></h1>}
-        {!order && <h1 className="text-[22px] font-extrabold">Exchange <span className="text-yellow">new</span></h1>}
-      </div>
+    <div className="mx-auto max-w-4xl px-6 pb-16">
+      <Reveal variant="fadeUp">
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-light tracking-tight text-fg md:text-4xl">
+            {t('order.exchangeHeading')}{' '}
+            <motion.span key={order?.status} className={`inline-block ${statusTone}`}
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35 }}>
+              {statusWord}
+            </motion.span>
+          </h1>
+        </div>
+      </Reveal>
 
       {/* Main 2-column layout */}
-      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_1fr]">
 
         {/* LEFT — Transfer details */}
-        <div className="bg-bg2 border border-border rounded-xl p-4">
-          <div className="text-[12px] font-bold mb-3 text-muted">Transfer details</div>
-          <div className="flex flex-col gap-2 text-[11.5px]">
-            <div><div className="text-muted text-[10px]">ID:</div><div className="font-bold text-yellow">{orderId}</div></div>
-            <div className="h-px bg-border"/>
-            {rateVal && <div><div className="text-muted text-[10px]">Rate:</div><div className="font-semibold text-green">{rateVal}</div></div>}
-            <div className="h-px bg-border"/>
-            <div>
-              <div className="text-muted text-[10px]">You send, {fromName}:</div>
-              <div className="font-bold text-white">{parseFloat(giveAmt||0).toFixed(2)} {fromSymbol}</div>
-            </div>
-            <div>
-              <div className="text-muted text-[10px]">You receive, {toName}:</div>
-              <div className="font-bold text-green">{parseFloat(takeAmt||0).toFixed(2)} {toSymbol}</div>
-            </div>
-            <div className="h-px bg-border"/>
-            <div>
-              <div className="text-muted text-[10px]">{toName} address:</div>
-              <div className="font-mono text-[10px] break-all text-muted">{destAddr}</div>
-            </div>
-            <div>
-              <div className="text-muted text-[10px]">E-mail:</div>
-              <div className="text-[11px] text-muted">{emailVal}</div>
-            </div>
+        <Panel pad={false} className="self-start">
+          <div className="border-b border-border px-5 py-4 text-sm font-medium text-muted">{t('order.transferDetails')}</div>
+          <div className="divide-y divide-border px-5">
+            <Row k={t('order.orderId')} v={<span className="text-brand-fg">{orderId}</span>} />
+            {rateVal && <Row k={t('order.rate')} v={<span className="text-green">{rateVal}</span>} />}
+            <Row k={`${t('order.youSend')}${fromName ? ` · ${fromName}` : ''}`} v={`${parseFloat(giveAmt||0).toFixed(2)} ${fromSymbol}`} />
+            <Row k={`${t('order.youReceive')}${toName ? ` · ${toName}` : ''}`} v={`${parseFloat(takeAmt||0).toFixed(2)} ${toSymbol}`} tone="text-green" />
+            <Row k={t('order.nameAddress', { name: toName || t('order.destination') })} v={destAddr} mono />
+            <Row k={t('order.email')} v={<span className="text-muted">{emailVal}</span>} />
             {order?.expires_at && order?.status === 'WAIT_PAYMENT' && (
               <>
-                <div className="h-px bg-border"/>
-                <div className="flex items-center justify-between">
-                  <div className="text-muted text-[10px]">Actual until:</div>
-                  <div className="text-[10px] text-white">{parseTs(order.expires_at).toLocaleString()}</div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-muted text-[10px]">Time left:</div>
-                  <div className={`text-[20px] font-extrabold tabular-nums ${timeLeft !== null && timeLeft < 300 ? 'text-red' : 'text-yellow'}`}>{fmt(timeLeft)}</div>
+                <Row k={t('order.actualUntil')} v={<span className="text-sm text-fg">{parseTs(order.expires_at).toLocaleString()}</span>} />
+                <div className="py-3">
+                  <div className="text-xs text-subtle">{t('order.timeLeft')}</div>
+                  <div className={`mt-0.5 text-3xl font-light tabular-nums ${timeLeft !== null && timeLeft < 300 ? 'text-red' : 'text-brand-fg'}`}>{fmt(timeLeft)}</div>
                 </div>
               </>
             )}
           </div>
-        </div>
+        </Panel>
 
         {/* RIGHT — Payment action area */}
-        <div className="bg-bg2 border border-border rounded-xl p-4">
+        <Reveal variant="fadeIn" className="self-start">
+        <Panel className="self-start">
 
           {/* ───────── WAIT_PAYMENT ───────── */}
           {order?.status === 'WAIT_PAYMENT' && isFiat && (
-            <div className="text-center py-6">
-              <div className="text-4xl mb-4">💬</div>
-              <div className="text-[16px] font-bold mb-2">Complete your payment in the live chat</div>
-              <p className="text-muted text-[12.5px] mb-5 leading-relaxed">
-                For bank &amp; card transfers, our operator shares the payment details privately in the chat.
-                Pay there, then tap <strong className="text-yellow">“I have paid”</strong> in the chat to confirm.
+            <div className="py-6 text-center">
+              <MessageCircle className="mx-auto mb-4 h-10 w-10 text-brand-fg" />
+              <div className="mb-2 text-lg font-medium text-fg">{t('order.fiat.title')}</div>
+              <p className="mx-auto mb-6 max-w-sm text-sm leading-relaxed text-muted">
+                {t('order.fiat.desc1')} <strong className="text-brand-fg">{t('order.fiat.iHavePaidQuoted')}</strong> {t('order.fiat.desc2')}
               </p>
-              <button onClick={openChat}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-yellow text-black font-extrabold rounded-xl hover:bg-yellow-d transition-colors text-[14px] cursor-pointer border-none">
-                💬 Open payment chat
-              </button>
-              <p className="text-[10px] text-muted mt-3">Order ID: <span className="text-yellow font-semibold">{orderId}</span> · payment details never appear on this page</p>
+              <Button onClick={openChat} className="mx-auto"><MessageCircle className="h-4 w-4" /> {t('order.fiat.openChat')}</Button>
+              <p className="mt-3 text-xs text-subtle">{t('order.orderId')}: <span className="font-medium text-brand-fg">{orderId}</span> {t('order.fiat.neverOnPage')}</p>
               <button onClick={handleCancel}
-                className="block mx-auto mt-5 px-5 py-2 border border-border text-muted text-[12px] rounded-lg hover:border-red hover:text-red transition-colors cursor-pointer bg-transparent">
-                Cancel order
+                className="mx-auto mt-5 block cursor-pointer rounded-lg border border-border bg-transparent px-5 py-2 text-sm text-muted transition-colors hover:border-red hover:text-red">
+                {t('order.cancelOrder')}
               </button>
             </div>
           )}
@@ -233,143 +230,132 @@ export function OrderPage() {
           {/* Crypto — step 1: confirm details */}
           {order?.status === 'WAIT_PAYMENT' && !isFiat && !revealPay && (
             <>
-              <div className="text-[13px] font-bold mb-3">Check and confirm your payment data:</div>
-              <div className="mb-2">
-                <div className="text-[10px] text-muted mb-1">You receive:</div>
-                <div className="flex items-center gap-2 bg-bg border border-border rounded-lg px-3 py-2">
-                  <div className="w-6 h-6 rounded-full bg-green/20 flex items-center justify-center text-green text-[9px] font-bold shrink-0">{toSymbol?.substring(0,2)}</div>
-                  <span className="text-muted text-[12px]">{toName}</span>
-                  <span className="ml-auto font-bold text-[13px]">{parseFloat(takeAmt||0).toFixed(2)} {toSymbol}</span>
+              <div className="mb-4 text-base font-medium text-fg">{t('order.confirm.title')}</div>
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-1 text-xs text-subtle">{t('order.youReceive')}</div>
+                  <div className="flex items-center gap-2 rounded-xl border border-border bg-bg px-3 py-2.5">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green/20 text-[9px] font-bold text-green">{toSymbol?.substring(0,2)}</span>
+                    <span className="text-sm text-muted">{toName}</span>
+                    <span className="ml-auto text-sm font-semibold text-fg">{parseFloat(takeAmt||0).toFixed(2)} {toSymbol}</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-subtle">{t('order.nameAddress', { name: toName })}</div>
+                  <div className="break-all rounded-xl border border-border bg-bg px-3 py-2.5 font-mono text-xs text-muted">{destAddr}</div>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-subtle">{t('order.email')}</div>
+                  <div className="rounded-xl border border-border bg-bg px-3 py-2.5 text-sm text-fg">{emailVal}</div>
                 </div>
               </div>
-              <div className="mb-2">
-                <div className="text-[10px] text-muted mb-1">{toName} address:</div>
-                <div className="bg-bg border border-border rounded-lg px-3 py-2 font-mono text-[10px] text-muted break-all">{destAddr}</div>
-              </div>
-              <div className="mb-4">
-                <div className="text-[10px] text-muted mb-1">E-mail:</div>
-                <div className="bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-white">{emailVal}</div>
-              </div>
-              <button onClick={()=>setRevealPay(true)}
-                className="w-full py-3 bg-yellow text-black font-extrabold text-[14px] rounded-lg hover:bg-yellow-d transition-colors cursor-pointer mb-2">
-                Continue to payment →
-              </button>
-              <button onClick={handleCancel}
-                className="w-full py-2 border border-border text-muted text-[12px] rounded-lg hover:border-red hover:text-red transition-colors cursor-pointer bg-transparent">
-                Cancel
-              </button>
+              <Button size="lg" onClick={()=>setRevealPay(true)} className="mt-5 py-3">{t('order.confirm.continueToPayment')}</Button>
+              <Button size="lg" variant="outline" onClick={handleCancel} className="mt-2 py-2.5 hover:border-red hover:text-red">{t('order.cancel')}</Button>
             </>
           )}
 
           {/* Crypto — step 2: send funds, then mark as paid */}
           {order?.status === 'WAIT_PAYMENT' && !isFiat && revealPay && (
             <div className="text-center">
-              <div className="text-[14px] font-bold mb-1">Send your payment to complete the order</div>
-              <p className="text-[11px] text-muted mb-4">Transfer the exact amount to the address below, then mark it as paid.</p>
-              <div className="flex justify-center mb-4">
-                <div className="w-36 h-36 bg-white rounded-xl p-1 flex items-center justify-center">
+              <div className="mb-1 text-base font-medium text-fg">{t('order.pay.title')}</div>
+              <p className="mb-4 text-xs text-muted">{t('order.pay.subtitle')}</p>
+              <div className="mb-4 flex justify-center">
+                <div className="flex h-36 w-36 items-center justify-center rounded-xl bg-white p-1">
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(payAddress || '')}&bgcolor=ffffff&color=000000&margin=2`}
-                    alt="Payment QR Code"
-                    className="w-full h-full rounded-lg"
+                    alt={t('order.pay.qrAlt')}
+                    className="h-full w-full rounded-lg"
                     onError={e => e.target.style.display='none'}
                   />
                 </div>
               </div>
               <div className="mb-3 text-left">
-                <div className="text-[11px] text-muted mb-1.5">Amount to send:</div>
-                <div className="bg-bg border border-border rounded-xl px-4 py-3 font-bold text-[13px]">{parseFloat(giveAmt||0).toFixed(2)} {fromSymbol}</div>
+                <div className="mb-1.5 text-xs text-subtle">{t('order.pay.amountToSend')}</div>
+                <div className="rounded-xl border border-border bg-bg px-4 py-3 text-sm font-semibold text-fg">{parseFloat(giveAmt||0).toFixed(2)} {fromSymbol}</div>
               </div>
               <div className="mb-4 text-left">
-                <div className="text-[11px] text-muted mb-1.5">To this {fromSymbol} address:</div>
-                <div className="flex items-center gap-2 bg-bg border border-yellow/30 rounded-xl px-4 py-3">
-                  <span className="font-mono text-[11px] text-yellow flex-1 break-all">{payAddress && payAddress !== 'PENDING_OPERATOR_ASSIGNMENT' ? payAddress : 'Address being assigned — please contact support'}</span>
+                <div className="mb-1.5 text-xs text-subtle">{t('order.pay.toThisAddress', { symbol: fromSymbol })}</div>
+                <div className="flex items-center gap-2 rounded-xl border border-brand/30 bg-bg px-4 py-3">
+                  <span className="flex-1 break-all font-mono text-xs text-brand-fg">{payAddress && payAddress !== 'PENDING_OPERATOR_ASSIGNMENT' ? payAddress : t('order.pay.addressBeingAssigned')}</span>
                   {payAddress && payAddress !== 'PENDING_OPERATOR_ASSIGNMENT' && (
                     <button onClick={()=>copy(payAddress, setCopied)}
-                      className="px-2.5 py-1 text-[11px] bg-bg3 border border-border rounded-lg hover:border-yellow hover:text-yellow transition-colors cursor-pointer shrink-0">
-                      {copied?'✓':'Copy'}
+                      className="flex shrink-0 items-center gap-1 cursor-pointer rounded-lg border border-border bg-bg3 px-2.5 py-1 text-xs transition-colors hover:border-brand hover:text-brand-fg">
+                      {copied ? <><Check className="h-3 w-3" /> {t('order.copied')}</> : t('order.copy')}
                     </button>
                   )}
                 </div>
               </div>
-              <button onClick={handlePaid} disabled={marking}
-                className="w-full py-3 bg-yellow text-black font-extrabold text-[14px] rounded-lg hover:bg-yellow-d transition-colors cursor-pointer mb-2 disabled:opacity-50">
-                {marking ? 'Submitting…' : '✓ I have paid'}
-              </button>
-              <button onClick={()=>setRevealPay(false)}
-                className="w-full py-2 border border-border text-muted text-[12px] rounded-lg hover:border-yellow hover:text-yellow transition-colors cursor-pointer bg-transparent">
-                ← Back
-              </button>
+              <Button size="lg" onClick={handlePaid} disabled={marking} className="py-3">
+                {marking ? t('order.pay.submitting') : <><Check className="h-4 w-4" /> {t('order.pay.iHavePaid')}</>}
+              </Button>
+              <Button size="lg" variant="outline" onClick={()=>setRevealPay(false)} className="mt-2 py-2.5"><ArrowLeft className="h-4 w-4" /> {t('order.back')}</Button>
             </div>
           )}
 
           {/* ───────── UNDER_REVIEW (paid, awaiting admin confirmation) ───────── */}
           {['UNDER_REVIEW','PAYMENT_RECEIVED'].includes(order?.status||'') && (
-            <div className="text-center py-8">
-              <div className="text-4xl mb-4">🔎</div>
-              <div className="text-[16px] font-bold mb-2 text-blue-400">Payment received — under review</div>
-              <p className="text-muted text-[12.5px] mb-5 leading-relaxed max-w-sm mx-auto">
-                Thanks! We’ve been notified that you paid. Our team is verifying the funds, and your
-                <strong className="text-white"> {parseFloat(takeAmt||0).toFixed(2)} {toSymbol}</strong> will be released to your wallet once confirmed.
+            <div className="py-8 text-center">
+              <Search className="mx-auto mb-4 h-10 w-10 text-info" />
+              <div className="mb-2 text-lg font-medium text-info">{t('order.review.title')}</div>
+              <p className="mx-auto mb-5 max-w-sm text-sm leading-relaxed text-muted">
+                {t('order.review.desc1')}
+                <strong className="text-fg"> {parseFloat(takeAmt||0).toFixed(2)} {toSymbol}</strong> {t('order.review.desc2')}
               </p>
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[11px] text-blue-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" /> Awaiting confirmation from our team
+              <div className="inline-flex items-center gap-2 rounded-lg border border-info/20 bg-info/10 px-4 py-2 text-xs text-info">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-info" /> {t('order.review.awaiting')}
               </div>
-              <p className="text-[10px] text-muted mt-4">Order ID: <span className="text-yellow font-semibold">{orderId}</span></p>
+              <p className="mt-4 text-xs text-subtle">{t('order.orderId')}: <span className="font-medium text-brand-fg">{orderId}</span></p>
             </div>
           )}
 
-          {/* WAIT_PAYMENT — after clicking Pay, show payment destination */}
           {order?.status === 'PROCESSING' && (
-            <div className="text-center py-8">
-              <div className="text-3xl animate-spin mb-4">⏳</div>
-              <div className="text-[16px] font-bold mb-2">Processing your exchange</div>
-              <p className="text-muted text-[12.5px]">We are sending {parseFloat(takeAmt||0).toFixed(2)} {toSymbol} to your wallet. This may take a few minutes.</p>
+            <div className="py-8 text-center">
+              <Loader2 className="mx-auto mb-4 h-9 w-9 animate-spin text-info" />
+              <div className="mb-2 text-lg font-medium text-fg">{t('order.processing.title')}</div>
+              <p className="text-sm text-muted">{t('order.processing.desc', { amount: `${parseFloat(takeAmt||0).toFixed(2)} ${toSymbol}` })}</p>
             </div>
           )}
 
           {order?.status === 'COMPLETED' && (
-            <div className="text-center py-8">
-              <div className="text-4xl mb-4">✅</div>
-              <div className="text-[18px] font-extrabold text-green mb-2">Exchange Completed!</div>
-              <p className="text-muted text-[12.5px] mb-5">{parseFloat(takeAmt||0).toFixed(2)} {toSymbol} has been sent to your wallet.</p>
-              <button onClick={()=>navigate('/about')} className="px-6 py-2.5 bg-yellow text-black font-bold rounded-lg hover:bg-yellow-d cursor-pointer">
-                New Exchange
-              </button>
+            <div className="py-8 text-center">
+              <CheckCircle2 className="mx-auto mb-4 h-11 w-11 text-green" />
+              <div className="mb-2 text-xl font-light text-green">{t('order.completed.title')}</div>
+              <p className="mb-5 text-sm text-muted">{t('order.completed.desc', { amount: `${parseFloat(takeAmt||0).toFixed(2)} ${toSymbol}` })}</p>
+              <Button onClick={()=>navigate('/about')} className="mx-auto">{t('order.newExchange')}</Button>
             </div>
           )}
 
           {/* EXPIRED/CANCELLED — hide all payment details */}
           {['EXPIRED','CANCELLED'].includes(order?.status||'') && (
-            <div className="text-center py-8">
-              <div className="text-5xl mb-4">{order?.status === 'EXPIRED' ? '⏰' : '❌'}</div>
-              <div className="text-[18px] font-bold text-red mb-3">
-                Order {order?.status === 'EXPIRED' ? 'Expired' : 'Cancelled'}
+            <div className="py-8 text-center">
+              {order?.status === 'EXPIRED'
+                ? <Clock className="mx-auto mb-4 h-11 w-11 text-red" />
+                : <XCircle className="mx-auto mb-4 h-11 w-11 text-red" />}
+              <div className="mb-3 text-xl font-light text-red">
+                {order?.status === 'EXPIRED' ? t('order.ended.expiredTitle') : t('order.ended.cancelledTitle')}
               </div>
-              <p className="text-muted text-[12.5px] mb-6 leading-relaxed">
+              <p className="mx-auto mb-6 max-w-sm text-sm leading-relaxed text-muted">
                 {order?.status === 'EXPIRED'
-                  ? 'The payment window has closed. No funds were transferred.'
-                  : 'This order has been cancelled. No funds were transferred.'}
+                  ? t('order.ended.expiredDesc')
+                  : t('order.ended.cancelledDesc')}
               </p>
-              <button onClick={()=>navigate('/about')}
-                className="px-6 py-3 bg-yellow text-black font-bold rounded-xl hover:bg-yellow-d cursor-pointer text-[13px]">
-                Create New Order
-              </button>
+              <Button onClick={()=>navigate('/about')} className="mx-auto">{t('order.createNewOrder')}</Button>
             </div>
           )}
 
           {!order && prefill && (
-            <div className="text-center py-8 text-muted animate-pulse text-sm">Loading order details…</div>
+            <div className="shimmer py-8 text-center text-sm text-muted">{t('order.loadingDetails')}</div>
           )}
-        </div>
+        </Panel>
+        </Reveal>
       </div>
-     </div>
     </div>
   );
 }
 
 // ── MY ORDERS ──
 export function MyOrders() {
+  const t = useT();
   const [orders, setOrders] = useState([]);
   const [tab, setTab]       = useState('CURRENT');
   const [loading, setLoad]  = useState(true);
@@ -380,10 +366,10 @@ export function MyOrders() {
   }, []);
 
   const TABS = [
-    { key:'CURRENT',   label:'🔄 Current',   statuses:['WAIT_PAYMENT','PAYMENT_RECEIVED','UNDER_REVIEW','PROCESSING','AML_HOLD'] },
-    { key:'COMPLETED', label:'✅ Completed',  statuses:['COMPLETED'] },
-    { key:'CANCELLED', label:'❌ Cancelled',  statuses:['CANCELLED','EXPIRED','REFUNDED'] },
-    { key:'ALL',       label:'📋 All Orders', statuses:null },
+    { key:'CURRENT',   label:t('myOrders.tabs.current'),   statuses:['WAIT_PAYMENT','PAYMENT_RECEIVED','UNDER_REVIEW','PROCESSING','AML_HOLD'] },
+    { key:'COMPLETED', label:t('myOrders.tabs.completed'), statuses:['COMPLETED'] },
+    { key:'CANCELLED', label:t('myOrders.tabs.cancelled'), statuses:['CANCELLED','EXPIRED','REFUNDED'] },
+    { key:'ALL',       label:t('myOrders.tabs.all'), statuses:null },
   ];
 
   const currentTab = TABS.find(t=>t.key===tab);
@@ -396,118 +382,113 @@ export function MyOrders() {
     counts[t.key] = t.statuses ? orders.filter(o=>t.statuses.includes(o.status)).length : orders.length;
   });
 
-  return (
-    <div className="flex flex-col px-4 md:px-8 pt-6" style={{ height: 'calc(100dvh - 56px)' }}>
-
-      {/* Fixed header — stays put while orders scroll */}
-      <div className="shrink-0">
-        <div className="flex items-center justify-between mb-3.5">
-          <h2 className="text-[17px] font-extrabold">My Orders</h2>
-          <button onClick={()=>navigate('/about')}
-            className="px-3.5 py-1.5 bg-yellow text-black text-[11.5px] font-bold rounded-lg hover:bg-yellow-d transition-colors cursor-pointer">
-            + New Exchange
-          </button>
+  // Presentational only — renders one order card. Hover-lift via `lift`; the row's
+  // click/navigation behaviour is unchanged.
+  const renderCard = (o, i) => {
+    const isActive   = ['WAIT_PAYMENT','PAYMENT_RECEIVED','UNDER_REVIEW','PROCESSING','AML_HOLD'].includes(o.status);
+    const isComplete = o.status === 'COMPLETED';
+    return (
+      <motion.div key={i} {...lift} onClick={()=>navigate(`/order/${o.order_id||o.id}`)}
+        className={`group cursor-pointer rounded-xl border bg-bg2 px-4 py-3.5 transition-colors hover:border-brand/50
+          ${isActive?'border-brand/30':isComplete?'border-green/20':'border-border'}`}>
+        <div className="mb-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-brand-fg">#{o.id||o.order_id}</span>
+            <Badge status={o.status} />
+          </div>
+          <span className="text-xs text-subtle">{new Date(o.created_at).toLocaleString()}</span>
         </div>
-
-        <div className="flex border-b border-border overflow-x-auto gap-1">
-          {TABS.map(t=>(
-            <button key={t.key} onClick={()=>setTab(t.key)}
-              className={`px-3.5 py-2 text-[11.5px] font-semibold whitespace-nowrap border-b-2 -mb-px transition-all cursor-pointer bg-transparent flex items-center gap-1.5
-                ${tab===t.key?'text-yellow border-yellow':'text-muted border-transparent hover:text-white'}`}>
-              {t.label}
-              {counts[t.key] > 0 && (
-                <span className={`text-[9.5px] px-1.5 py-0.5 rounded-full font-bold
-                  ${tab===t.key?'bg-yellow/20 text-yellow':'bg-bg3 text-muted'}`}>
-                  {counts[t.key]}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Scrollable orders panel */}
-      <div className="orders-scroll flex-1 min-h-0 overflow-y-auto py-3.5 pr-1.5">
-        {loading ? (
-          <div className="text-center py-14 text-muted text-sm animate-pulse">Loading your orders…</div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-14">
-            <div className="text-3xl mb-3 opacity-40">
-              {tab==='CURRENT'?'🔄':tab==='COMPLETED'?'✅':'📋'}
+        <div className="flex items-center gap-4">
+          <span className="flex shrink-0 items-center -space-x-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-bg2 bg-brand/15 text-[10px] font-bold text-brand-fg">{(o.from?.symbol || o.from_symbol || '?').slice(0,2)}</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-bg2 bg-bg3 text-[10px] font-bold text-fg">{(o.to?.symbol || o.to_symbol || '?').slice(0,2)}</span>
+          </span>
+          <div className="min-w-0">
+            <div className="mb-0.5 text-[10px] uppercase tracking-wide text-subtle">{t('myOrders.youSend')}</div>
+            <div className="text-sm font-semibold leading-none text-fg">
+              {parseFloat(o.from?.amount || o.from_amount || 0).toFixed(2)} <span className="text-xs font-normal text-muted">{o.from?.symbol || o.from_symbol || '—'}</span>
             </div>
-            <div className="text-muted text-[13px]">No {tab.toLowerCase()} orders yet</div>
-            {tab === 'CURRENT' && (
-              <button onClick={()=>navigate('/about')}
-                className="mt-4 px-5 py-2 bg-yellow text-black text-[12px] font-bold rounded-lg cursor-pointer hover:bg-yellow-d transition-colors">
-                Start an Exchange
-              </button>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-subtle" />
+          <div className="min-w-0">
+            <div className="mb-0.5 text-[10px] uppercase tracking-wide text-subtle">{t('myOrders.youReceive')}</div>
+            <div className={`text-sm font-semibold leading-none ${isComplete?'text-green':'text-fg'}`}>
+              {parseFloat(o.to?.amount || o.to_amount || 0).toFixed(2)} <span className="text-xs font-normal text-muted">{o.to?.symbol || o.to_symbol || '—'}</span>
+            </div>
+          </div>
+          {o.status === 'WAIT_PAYMENT' && o.expires_at && (
+            <div className="ml-auto text-right">
+              <div className="mb-0.5 text-[9px] uppercase tracking-wide text-subtle">{t('myOrders.expires')}</div>
+              <div className={`text-sm font-semibold ${parseTs(o.expires_at) > new Date() ? 'text-brand-fg' : 'text-red'}`}>
+                {parseTs(o.expires_at) > new Date()
+                  ? t('myOrders.minutesLeft', { minutes: Math.max(0,Math.floor((parseTs(o.expires_at)-Date.now())/60000)) })
+                  : t('myOrders.expired')}
+              </div>
+            </div>
+          )}
+          {['UNDER_REVIEW','PAYMENT_RECEIVED','PROCESSING'].includes(o.status) && (
+            <div className="ml-auto text-right">
+              <div className="mb-0.5 text-[9px] uppercase tracking-wide text-subtle">{t('myOrders.statusLabel')}</div>
+              <div className="text-sm font-semibold text-info">{t('myOrders.underReview')}</div>
+            </div>
+          )}
+          <div className={`text-muted transition-colors group-hover:text-brand-fg ${(o.status==='WAIT_PAYMENT'&&o.expires_at)||['UNDER_REVIEW','PAYMENT_RECEIVED','PROCESSING'].includes(o.status)?'':'ml-auto'}`}>›</div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="mx-auto max-w-4xl px-6 pb-16">
+      <Reveal variant="fadeUp">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-3xl font-light tracking-tight text-fg">{t('myOrders.title')}</h1>
+          <Button onClick={()=>navigate('/about')} size="md">{t('myOrders.newExchange')}</Button>
+        </div>
+      </Reveal>
+
+      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-border">
+        {TABS.map(t=>(
+          <button key={t.key} onClick={()=>setTab(t.key)}
+            className={`relative -mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4 py-2.5 text-sm font-medium transition-colors
+              ${tab===t.key?'text-brand-fg':'text-muted hover:text-fg'}`}>
+            {tab===t.key && <motion.span layoutId="orders-tab" className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand" />}
+            <span className="relative z-10">{t.label}</span>
+            {counts[t.key] > 0 && (
+              <span className={`relative z-10 rounded-full px-1.5 py-0.5 text-[10px] font-semibold
+                ${tab===t.key?'bg-brand/20 text-brand-fg':'bg-bg3 text-muted'}`}>
+                {counts[t.key]}
+              </span>
             )}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {filtered.map((o,i) => {
-              const isActive   = ['WAIT_PAYMENT','PAYMENT_RECEIVED','UNDER_REVIEW','PROCESSING','AML_HOLD'].includes(o.status);
-              const isComplete = o.status === 'COMPLETED';
-              return (
-                <div key={i} onClick={()=>navigate(`/order/${o.order_id||o.id}`)}
-                  className={`bg-bg2 border rounded-lg px-3.5 py-2.5 cursor-pointer hover:border-yellow/50 transition-all group
-                    ${isActive?'border-yellow/30':isComplete?'border-green/20':'border-border'}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-yellow font-bold text-[11.5px]">#{o.id||o.order_id}</span>
-                      <Badge status={o.status} />
-                    </div>
-                    <span className="text-[10px] text-muted">{new Date(o.created_at).toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[9.5px] text-muted mb-0.5 uppercase tracking-wide">You Send</div>
-                      <div className="font-bold text-[13px] text-white leading-none">
-                        {parseFloat(o.from?.amount || o.from_amount || 0).toFixed(2)} <span className="text-[10px] text-muted font-normal">{o.from?.symbol || o.from_symbol || '—'}</span>
-                      </div>
-                    </div>
-                    <div className="text-muted text-[13px]">→</div>
-                    <div className="min-w-0">
-                      <div className="text-[9.5px] text-muted mb-0.5 uppercase tracking-wide">You Receive</div>
-                      <div className={`font-bold text-[13px] leading-none ${isComplete?'text-green':'text-white'}`}>
-                        {parseFloat(o.to?.amount || o.to_amount || 0).toFixed(2)} <span className="text-[10px] text-muted font-normal">{o.to?.symbol || o.to_symbol || '—'}</span>
-                      </div>
-                    </div>
-                    {o.status === 'WAIT_PAYMENT' && o.expires_at && (
-                      <div className="ml-auto text-right">
-                        <div className="text-[9px] text-muted mb-0.5 uppercase tracking-wide">Expires</div>
-                        <div className={`text-[11.5px] font-bold ${parseTs(o.expires_at) > new Date() ? 'text-yellow' : 'text-red'}`}>
-                          {parseTs(o.expires_at) > new Date()
-                            ? `${Math.max(0,Math.floor((parseTs(o.expires_at)-Date.now())/60000))}m left`
-                            : 'Expired'}
-                        </div>
-                      </div>
-                    )}
-                    {['UNDER_REVIEW','PAYMENT_RECEIVED','PROCESSING'].includes(o.status) && (
-                      <div className="ml-auto text-right">
-                        <div className="text-[9px] text-muted mb-0.5 uppercase tracking-wide">Status</div>
-                        <div className="text-[11.5px] font-bold text-blue-400">Under review</div>
-                      </div>
-                    )}
-                    <div className={`text-muted group-hover:text-yellow transition-colors text-sm ${(o.status==='WAIT_PAYMENT'&&o.expires_at)||['UNDER_REVIEW','PAYMENT_RECEIVED','PROCESSING'].includes(o.status)?'':'ml-auto'}`}>›</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+          </button>
+        ))}
       </div>
 
-      <style>{`
-        .orders-scroll { scrollbar-width: thin; scrollbar-color: #2B3139 transparent; }
-        .orders-scroll::-webkit-scrollbar { width: 8px; }
-        .orders-scroll::-webkit-scrollbar-track { background: transparent; }
-        .orders-scroll::-webkit-scrollbar-thumb { background: #2B3139; border-radius: 8px; }
-        .orders-scroll::-webkit-scrollbar-thumb:hover { background: #F0B90B; }
-      `}</style>
+      {loading ? (
+        <div className="shimmer py-16 text-center text-sm text-muted">{t('myOrders.loading')}</div>
+      ) : filtered.length === 0 ? (
+        <div className="py-16 text-center">
+          <div className="mb-3 flex justify-center text-muted/40">
+            {tab === 'CURRENT' ? <RefreshCw className="h-8 w-8" /> : tab === 'COMPLETED' ? <CheckCircle2 className="h-8 w-8" /> : <ClipboardList className="h-8 w-8" />}
+          </div>
+          <div className="text-sm text-muted">{t(`myOrders.empty.${tab.toLowerCase()}`)}</div>
+          {tab === 'CURRENT' && (
+            <Button onClick={()=>navigate('/about')} className="mx-auto mt-4">{t('myOrders.startExchange')}</Button>
+          )}
+        </div>
+      ) : filtered.length <= 12 ? (
+        <RevealGroup className="flex flex-col gap-2.5">
+          {filtered.map((o,i) => <RevealItem key={i} variant="fadeUp">{renderCard(o,i)}</RevealItem>)}
+        </RevealGroup>
+      ) : (
+        <Reveal variant="fadeUp" className="flex flex-col gap-2.5">
+          {filtered.map((o,i) => renderCard(o,i))}
+        </Reveal>
+      )}
     </div>
   );
 }
+
 // ── PROFILE / ACCOUNT ──
 const initialsOf = (name, email) => {
   const s = (name || email || '?').trim();
@@ -519,50 +500,53 @@ const pctOf = (cur, max) => { const m = Number(max) || 0, c = Number(cur) || 0; 
 
 const PInput = ({ label, type = 'text', value, onChange, placeholder = '' }) => (
   <div>
-    {label && <label className="text-[10px] text-muted font-medium block mb-1">{label}</label>}
+    {label && <label className="mb-1.5 block text-xs font-medium text-muted">{label}</label>}
     <input type={type} value={value} onChange={onChange} placeholder={placeholder}
-      className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-white text-[12px] outline-none placeholder-muted focus:border-yellow transition-colors" />
+      className="w-full rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm text-fg outline-none transition-colors placeholder:text-subtle focus:border-brand" />
   </div>
 );
 const PCard = ({ title, desc, children, danger, action, className = '' }) => (
-  <div className={`bg-bg2 border rounded-xl p-4 ${danger ? 'border-red/30' : 'border-border'} ${className}`}>
+  <div className={`rounded-2xl border bg-bg2 p-5 ${danger ? 'border-red/30' : 'border-border'} ${className}`}>
     {(title || action) && (
-      <div className="flex items-center justify-between gap-3 mb-3">
-        {title && <div className={`font-semibold text-[12.5px] ${danger ? 'text-red' : ''}`}>{title}</div>}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        {title && <div className={`text-sm font-semibold ${danger ? 'text-red' : 'text-fg'}`}>{title}</div>}
         {action}
       </div>
     )}
-    {desc && <div className="text-[10.5px] text-muted mb-3 leading-snug">{desc}</div>}
+    {desc && <div className="mb-4 text-xs leading-relaxed text-muted">{desc}</div>}
     {children}
   </div>
 );
 const PChip = ({ ok, warn, label }) => (
-  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border
-    ${ok ? 'bg-green/10 text-green border-green/20' : warn ? 'bg-yellow/10 text-yellow border-yellow/20' : 'bg-bg3 text-muted border-border'}`}>
-    <span className="w-1 h-1 rounded-full bg-current" />{label}
+  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium
+    ${ok ? 'border-green/20 bg-green/10 text-green' : warn ? 'border-brand/20 bg-brand/10 text-brand-fg' : 'border-border bg-bg3 text-muted'}`}>
+    <span className="h-1 w-1 rounded-full bg-current" />{label}
   </span>
 );
 const PBar = ({ label, cur, max, suffix = '' }) => (
   <div>
-    <div className="flex justify-between text-[10.5px] mb-1">
+    <div className="mb-1.5 flex justify-between text-xs">
       <span className="text-muted">{label}</span>
-      <span className="text-white font-medium">{Number(cur || 0).toLocaleString()} / {Number(max || 0).toLocaleString()}{suffix}</span>
+      <span className="font-medium text-fg">
+        <CountUp value={Number(cur || 0)} format={n => Math.round(n).toLocaleString()} /> / <CountUp value={Number(max || 0)} format={n => Math.round(n).toLocaleString()} />{suffix}
+      </span>
     </div>
-    <div className="h-1 bg-bg rounded-full overflow-hidden">
-      <div className="h-full bg-yellow rounded-full transition-all" style={{ width: `${pctOf(cur, max)}%` }} />
+    <div className="h-1.5 overflow-hidden rounded-full bg-bg">
+      <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${pctOf(cur, max)}%` }} />
     </div>
   </div>
 );
 const PStat = ({ label, value, tone = '' }) => (
-  <div className="bg-bg2 border border-border rounded-lg px-3 py-2.5">
-    <div className="text-[9px] text-muted uppercase tracking-wide mb-0.5">{label}</div>
-    <div className={`text-[13px] font-bold ${tone}`}>{value}</div>
+  <div className="rounded-xl border border-border bg-bg2 px-4 py-3">
+    <div className="mb-0.5 text-[10px] uppercase tracking-wide text-subtle">{label}</div>
+    <div className={`text-sm font-semibold ${tone || 'text-fg'}`}>{value}</div>
   </div>
 );
-const btnGold  = "px-4 py-2 bg-yellow text-black font-semibold text-[12px] rounded-lg hover:bg-yellow-d transition-colors cursor-pointer";
-const btnGhost = "px-4 py-2 border border-border text-white font-medium text-[12px] rounded-lg hover:border-yellow hover:text-yellow transition-colors cursor-pointer";
+const btnGold  = "cursor-pointer rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-h";
+const btnGhost = "cursor-pointer rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-fg transition-colors hover:border-brand hover:text-brand-fg";
 
 export function Profile() {
+  const t = useT();
   const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -610,89 +594,100 @@ export function Profile() {
       const r = await api.profileEditMain(form);
       if (link && link !== (u?.partner_link || '')) {
         const lr = await api.profileEditPartnerLink({ partner_link: link });
-        if (!lr?.success) return toast('err', lr?.error?.message || 'Partner link not saved');
+        if (!lr?.success) return toast('err', lr?.error?.message || t('profile.toast.partnerLinkNotSaved'));
       }
-      r?.success ? toast('ok', 'Profile saved') : toast('err', r?.error?.message || 'Could not save');
-    } catch { toast('err', 'Could not save'); }
+      r?.success ? toast('ok', t('profile.toast.profileSaved')) : toast('err', r?.error?.message || t('profile.toast.couldNotSave'));
+    } catch { toast('err', t('profile.toast.couldNotSave')); }
   };
   const changePassword = async () => {
-    if (pw.new_password !== pw.confirm) return toast('err', 'New passwords do not match');
-    if (pw.new_password.length < 8)     return toast('err', 'Password must be at least 8 characters');
+    if (pw.new_password !== pw.confirm) return toast('err', t('profile.toast.passwordsMismatch'));
+    if (pw.new_password.length < 8)     return toast('err', t('profile.toast.passwordTooShort'));
     const r = await api.profileEditPassword({ old_password: pw.old_password, new_password: pw.new_password });
-    if (r?.success) { toast('ok', 'Password updated'); setPw({ old_password: '', new_password: '', confirm: '' }); }
-    else toast('err', r?.error?.message || 'Could not update password');
+    if (r?.success) { toast('ok', t('profile.toast.passwordUpdated')); setPw({ old_password: '', new_password: '', confirm: '' }); }
+    else toast('err', r?.error?.message || t('profile.toast.couldNotUpdatePassword'));
   };
   const changeEmail = async () => {
     const r = await api.profileEditEmail(em);
-    if (r?.success) { toast('ok', r.data?.message || 'Confirmation sent to new email'); setEm({ email: '', password: '' }); load(); }
-    else toast('err', r?.error?.message || 'Could not change email');
+    if (r?.success) { toast('ok', r.data?.message || t('profile.toast.confirmationSent')); setEm({ email: '', password: '' }); load(); }
+    else toast('err', r?.error?.message || t('profile.toast.couldNotChangeEmail'));
   };
   const enable2FA = async () => {
     const r = await api.otpCreate();
     if (r?.success) setOtp({ secret: r.data.secret, uri: r.data.qr_url, code: '' });
-    else toast('err', r?.error?.message || 'Could not start 2FA setup');
+    else toast('err', r?.error?.message || t('profile.toast.couldNotStart2fa'));
   };
   const confirm2FA = async () => {
     const r = await api.otpConfirm({ code: otp?.code || '' });
-    if (r?.success) { setTwoFA(true); setOtp(null); toast('ok', 'Two-factor authentication enabled'); }
-    else toast('err', r?.error?.message || 'Invalid code');
+    if (r?.success) { setTwoFA(true); setOtp(null); toast('ok', t('profile.toast.twoFaEnabled')); }
+    else toast('err', r?.error?.message || t('profile.toast.invalidCode'));
   };
   const disable2FA = async () => {
     const r = await api.otpDelete();
-    if (r?.success) { setTwoFA(false); toast('ok', '2FA disabled'); } else toast('err', 'Could not disable 2FA');
+    if (r?.success) { setTwoFA(false); toast('ok', t('profile.toast.twoFaDisabled')); } else toast('err', t('profile.toast.couldNotDisable2fa'));
   };
   const signOut = async () => { try { await logout(); } finally { navigate('/login'); } };
   const blockAccount = async () => {
-    if (!window.confirm('Freeze your account? You will be signed out and exchanges will be blocked until support reactivates it.')) return;
+    if (!window.confirm(t('profile.confirm.freeze'))) return;
     const r = await api.profileBlock();
-    if (r?.success) signOut(); else toast('err', 'Could not freeze account');
+    if (r?.success) signOut(); else toast('err', t('profile.toast.couldNotFreeze'));
   };
   const deleteAccount = async () => {
-    if (delTxt !== 'DELETE') return toast('err', 'Type DELETE to confirm');
+    if (delTxt !== 'DELETE') return toast('err', t('profile.toast.typeDeleteToConfirm'));
     const r = await api.profileDelete();
-    if (r?.success) signOut(); else toast('err', 'Could not delete account');
+    if (r?.success) signOut(); else toast('err', t('profile.toast.couldNotDelete'));
   };
-  const copy = t => { try { navigator.clipboard.writeText(t); toast('ok', 'Copied'); } catch {} };
+  const copy = txt => { try { navigator.clipboard.writeText(txt); toast('ok', t('profile.toast.copied')); } catch {} };
 
-  if (loading) return <div className="flex items-center justify-center min-h-[40vh] text-muted text-sm">Loading account…</div>;
+  if (loading) return <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted">{t('profile.loading')}</div>;
 
   const display = u || authUser || {};
   const verStatus = (vers[0]?.status || '').toLowerCase();
   const kycState = vers.length === 0 ? 'none' : (verStatus || 'pending');
-  const kycLabel = kycState === 'none' ? 'Not started' : kycState.charAt(0).toUpperCase() + kycState.slice(1);
+  const kycLabel = kycState === 'none'
+    ? t('profile.kyc.notStarted')
+    : ['pending','approved','verified','rejected'].includes(kycState)
+      ? t(`profile.kyc.${kycState}`)
+      : kycState.charAt(0).toUpperCase() + kycState.slice(1);
 
-  const TABS = [['profile','Profile'], ['security','Security'], ['verification','Verification'], ['wallets','Wallets'], ['danger','Danger']];
+  const TABS = [['profile',t('profile.tabs.profile')], ['security',t('profile.tabs.security')], ['verification',t('profile.tabs.verification')], ['wallets',t('profile.tabs.wallets')], ['danger',t('profile.tabs.danger')]];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 md:px-8 py-7">
-      <div className="lg:grid lg:grid-cols-[230px_1fr] lg:gap-5 lg:items-start">
+    <div className="mx-auto max-w-5xl px-6 pb-16">
+      <Reveal variant="fadeUp">
+        <div className="border-b border-border py-8">
+          <h1 className="text-3xl font-light tracking-tight text-fg">{t('profile.title')}</h1>
+          <p className="mt-1.5 text-sm text-muted">{t('profile.subtitle')}</p>
+        </div>
+      </Reveal>
+
+      <div className="pt-8 lg:grid lg:grid-cols-[240px_1fr] lg:items-start lg:gap-6">
 
         {/* ── LEFT: identity + nav ── */}
-        <div className="lg:sticky lg:top-6 space-y-3 mb-4 lg:mb-0">
-          <div className="bg-bg2 border border-border rounded-xl p-4">
+        <div className="mb-4 space-y-3 lg:sticky lg:top-28 lg:mb-0">
+          <div className="rounded-2xl border border-border bg-bg2 p-5">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[16px] font-extrabold text-black shrink-0"
-                style={{ background: 'linear-gradient(135deg, #F0B90B, #c99a09)' }}>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white"
+                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-h))' }}>
                 {initialsOf(display.name, display.email)}
               </div>
               <div className="min-w-0">
-                <div className="text-[14px] font-bold truncate leading-tight">{display.name || 'Your account'}</div>
-                <div className="text-[10.5px] text-muted truncate">{display.email}</div>
+                <div className="truncate text-sm font-semibold leading-tight text-fg">{display.name || t('profile.yourAccount')}</div>
+                <div className="truncate text-xs text-muted">{display.email}</div>
               </div>
             </div>
-            <div className="text-[10px] text-muted mt-2">Member since {fmtDate(display.created_at)}</div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
-              <PChip ok={!!display.email_verified} warn={!display.email_verified} label={display.email_verified ? 'Verified' : 'Unverified'} />
-              <PChip ok={twoFA} warn={!twoFA} label={twoFA ? '2FA on' : '2FA off'} />
-              {display.is_blocked && <PChip warn label="Frozen" />}
+            <div className="mt-3 text-xs text-subtle">{t('profile.memberSince', { date: fmtDate(display.created_at) })}</div>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <PChip ok={!!display.email_verified} warn={!display.email_verified} label={display.email_verified ? t('profile.chip.verified') : t('profile.chip.unverified')} />
+              <PChip ok={twoFA} warn={!twoFA} label={twoFA ? t('profile.chip.twoFaOn') : t('profile.chip.twoFaOff')} />
+              {display.is_blocked && <PChip warn label={t('profile.chip.frozen')} />}
             </div>
           </div>
 
-          <div className="flex lg:flex-col gap-1 bg-bg2 border border-border rounded-xl p-1 overflow-x-auto">
+          <div className="flex gap-1 overflow-x-auto rounded-2xl border border-border bg-bg2 p-1 lg:flex-col">
             {TABS.map(([k, lbl]) => (
               <button key={k} onClick={() => setTab(k)}
-                className={`lg:w-full text-left px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap transition-colors cursor-pointer
-                  ${tab === k ? (k === 'danger' ? 'bg-red text-white' : 'bg-yellow text-black') : 'text-muted hover:text-white hover:bg-bg3'}`}>
+                className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-left text-sm font-medium transition-colors lg:w-full
+                  ${tab === k ? (k === 'danger' ? 'bg-red text-white' : 'bg-brand text-white') : 'text-muted hover:bg-bg3 hover:text-fg'}`}>
                 {lbl}
               </button>
             ))}
@@ -702,38 +697,38 @@ export function Profile() {
         {/* ── RIGHT: content ── */}
         <div className="min-w-0">
           {flash && (
-            <div className={`mb-3 px-3 py-2 rounded-lg text-[11.5px] border
-              ${flash.type === 'ok' ? 'bg-green/10 text-green border-green/20' : 'bg-red/10 text-red border-red/20'}`}>
+            <div className={`mb-4 rounded-xl border px-4 py-2.5 text-sm
+              ${flash.type === 'ok' ? 'border-green/20 bg-green/10 text-green' : 'border-red/20 bg-red/10 text-red'}`}>
               {flash.text}
             </div>
           )}
 
           {/* PROFILE */}
           {tab === 'profile' && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2.5">
-                <PStat label="Verification" value={kycLabel} tone={kycState === 'approved' || kycState === 'verified' ? 'text-green' : 'text-yellow'} />
-                <PStat label="2FA" value={twoFA ? 'On' : 'Off'} tone={twoFA ? 'text-green' : 'text-muted'} />
-                <PStat label="Wallets" value={bals.length} />
-              </div>
-              <div className="grid md:grid-cols-2 gap-3">
-                <PCard title="Personal details">
-                  <div className="space-y-2.5">
-                    <PInput label="Full name" value={form.name} onChange={setF('name')} placeholder="Your name" />
-                    <PInput label="Phone" value={form.phone} onChange={setF('phone')} placeholder="+254 7XX XXX XXX" />
-                    <button onClick={saveProfile} className={btnGold}>Save changes</button>
+            <div className="space-y-4">
+              <RevealGroup className="grid grid-cols-3 gap-3">
+                <RevealItem variant="scaleIn"><PStat label={t('profile.stat.verification')} value={kycLabel} tone={kycState === 'approved' || kycState === 'verified' ? 'text-green' : 'text-brand-fg'} /></RevealItem>
+                <RevealItem variant="scaleIn"><PStat label={t('profile.stat.twoFa')} value={twoFA ? t('profile.on') : t('profile.off')} tone={twoFA ? 'text-green' : 'text-muted'} /></RevealItem>
+                <RevealItem variant="scaleIn"><PStat label={t('profile.stat.wallets')} value={<CountUp value={bals.length} />} /></RevealItem>
+              </RevealGroup>
+              <div className="grid gap-4 md:grid-cols-2">
+                <PCard title={t('profile.personal.title')}>
+                  <div className="space-y-3">
+                    <PInput label={t('profile.personal.fullName')} value={form.name} onChange={setF('name')} placeholder={t('profile.personal.fullNamePlaceholder')} />
+                    <PInput label={t('profile.personal.phone')} value={form.phone} onChange={setF('phone')} placeholder="+254 7XX XXX XXX" />
+                    <button onClick={saveProfile} className={btnGold}>{t('profile.personal.save')}</button>
                   </div>
                 </PCard>
-                <PCard title="Limits">
+                <PCard title={t('profile.limits.title')}>
                   {limits ? (
-                    <div className="space-y-2.5">
-                      <PBar label="Daily"   cur={limits.current_daily}   max={limits.daily_limit}   suffix=" USD" />
-                      <PBar label="Monthly" cur={limits.current_monthly} max={limits.monthly_limit} suffix=" USD" />
+                    <div className="space-y-4">
+                      <PBar label={t('profile.limits.daily')}   cur={limits.current_daily}   max={limits.daily_limit}   suffix=" USD" />
+                      <PBar label={t('profile.limits.monthly')} cur={limits.current_monthly} max={limits.monthly_limit} suffix=" USD" />
                       {limits.kyc_required_at && (
-                        <div className="text-[10px] text-muted">KYC required above {Number(limits.kyc_required_at).toLocaleString()} USD.</div>
+                        <div className="text-xs text-muted">{t('profile.limits.kycRequired', { amount: Number(limits.kyc_required_at).toLocaleString() })}</div>
                       )}
                     </div>
-                  ) : <div className="text-[11px] text-muted">Unavailable.</div>}
+                  ) : <div className="text-sm text-muted">{t('profile.limits.unavailable')}</div>}
                 </PCard>
               </div>
             </div>
@@ -741,69 +736,69 @@ export function Profile() {
 
           {/* SECURITY */}
           {tab === 'security' && (
-            <div className="space-y-3">
-              <div className="grid md:grid-cols-2 gap-3">
-                <PCard title="Change password">
-                  <div className="space-y-2.5">
-                    <PInput label="Current password" type="password" value={pw.old_password} onChange={e => setPw(p => ({ ...p, old_password: e.target.value }))} />
-                    <PInput label="New password" type="password" value={pw.new_password} onChange={e => setPw(p => ({ ...p, new_password: e.target.value }))} />
-                    <PInput label="Confirm new" type="password" value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} />
-                    <button onClick={changePassword} className={btnGold}>Update password</button>
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <PCard title={t('profile.password.title')}>
+                  <div className="space-y-3">
+                    <PInput label={t('profile.password.current')} type="password" value={pw.old_password} onChange={e => setPw(p => ({ ...p, old_password: e.target.value }))} />
+                    <PInput label={t('profile.password.new')} type="password" value={pw.new_password} onChange={e => setPw(p => ({ ...p, new_password: e.target.value }))} />
+                    <PInput label={t('profile.password.confirm')} type="password" value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} />
+                    <button onClick={changePassword} className={btnGold}>{t('profile.password.update')}</button>
                   </div>
                 </PCard>
-                <PCard title="Change email">
-                  {display.pending_email && <div className="text-[10.5px] text-yellow mb-2.5">Pending: {display.pending_email}</div>}
-                  <div className="space-y-2.5">
-                    <PInput label="New email" type="email" value={em.email} onChange={e => setEm(s => ({ ...s, email: e.target.value }))} placeholder="new@email.com" />
-                    <PInput label="Current password" type="password" value={em.password} onChange={e => setEm(s => ({ ...s, password: e.target.value }))} />
-                    <button onClick={changeEmail} className={btnGhost}>Send confirmation</button>
+                <PCard title={t('profile.email.title')}>
+                  {display.pending_email && <div className="mb-3 text-xs text-brand-fg">{t('profile.email.pending', { email: display.pending_email })}</div>}
+                  <div className="space-y-3">
+                    <PInput label={t('profile.email.new')} type="email" value={em.email} onChange={e => setEm(s => ({ ...s, email: e.target.value }))} placeholder="new@email.com" />
+                    <PInput label={t('profile.password.current')} type="password" value={em.password} onChange={e => setEm(s => ({ ...s, password: e.target.value }))} />
+                    <button onClick={changeEmail} className={btnGhost}>{t('profile.email.send')}</button>
                   </div>
                 </PCard>
               </div>
 
-              <PCard title="Two-factor authentication"
-                desc="An authenticator-app code in addition to your password."
-                action={<PChip ok={twoFA} warn={!twoFA} label={twoFA ? 'Enabled' : 'Disabled'} />}>
-                {!twoFA && !otp && <button onClick={enable2FA} className={btnGold}>Enable 2FA</button>}
+              <PCard title={t('profile.twoFa.title')}
+                desc={t('profile.twoFa.desc')}
+                action={<PChip ok={twoFA} warn={!twoFA} label={twoFA ? t('profile.twoFa.enabled') : t('profile.twoFa.disabled')} />}>
+                {!twoFA && !otp && <button onClick={enable2FA} className={btnGold}>{t('profile.twoFa.enable')}</button>}
                 {!twoFA && otp && (
-                  <div className="space-y-2.5 max-w-md">
-                    <div className="text-[10.5px] text-muted">Add this secret to your authenticator app:</div>
+                  <div className="max-w-md space-y-3">
+                    <div className="text-xs text-muted">{t('profile.twoFa.addSecret')}</div>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 bg-bg border border-border rounded-lg px-3 py-1.5 text-[11.5px] text-yellow break-all">{otp.secret}</code>
-                      <button onClick={() => copy(otp.secret)} className="px-2.5 py-1.5 border border-border rounded-lg text-[10.5px] text-muted hover:text-white cursor-pointer">Copy</button>
+                      <code className="flex-1 break-all rounded-lg border border-border bg-bg px-3 py-2 text-xs text-brand-fg">{otp.secret}</code>
+                      <button onClick={() => copy(otp.secret)} className="cursor-pointer rounded-lg border border-border px-2.5 py-2 text-xs text-muted hover:text-fg">{t('profile.copy')}</button>
                     </div>
                     <div className="flex gap-2">
-                      <input value={otp.code} onChange={e => setOtp(o => ({ ...o, code: e.target.value }))} placeholder="6-digit code" inputMode="numeric"
-                        className="flex-1 bg-bg border border-border rounded-lg px-3 py-2 text-white text-[12px] tracking-widest outline-none focus:border-yellow" />
-                      <button onClick={confirm2FA} className={btnGold}>Verify</button>
+                      <input value={otp.code} onChange={e => setOtp(o => ({ ...o, code: e.target.value }))} placeholder={t('profile.twoFa.codePlaceholder')} inputMode="numeric"
+                        className="flex-1 rounded-lg border border-border bg-bg px-3 py-2.5 text-sm tracking-widest text-fg outline-none focus:border-brand" />
+                      <button onClick={confirm2FA} className={btnGold}>{t('profile.twoFa.verify')}</button>
                     </div>
-                    <button onClick={() => setOtp(null)} className="text-[10.5px] text-muted hover:text-white cursor-pointer bg-transparent border-none p-0">Cancel</button>
+                    <button onClick={() => setOtp(null)} className="cursor-pointer border-none bg-transparent p-0 text-xs text-muted hover:text-fg">{t('profile.cancel')}</button>
                   </div>
                 )}
-                {twoFA && <button onClick={disable2FA} className="px-4 py-2 border border-red/40 text-red font-medium text-[12px] rounded-lg hover:bg-red/10 transition-colors cursor-pointer">Disable 2FA</button>}
+                {twoFA && <button onClick={disable2FA} className="cursor-pointer rounded-xl border border-red/40 px-4 py-2.5 text-sm font-medium text-red transition-colors hover:bg-red/10">{t('profile.twoFa.disable')}</button>}
               </PCard>
             </div>
           )}
 
           {/* VERIFICATION */}
           {tab === 'verification' && (
-            <div className="grid md:grid-cols-2 gap-3">
-              <PCard title="Identity"
+            <div className="grid gap-4 md:grid-cols-2">
+              <PCard title={t('profile.identity.title')}
                 action={<PChip ok={kycState === 'approved' || kycState === 'verified'} warn={kycState === 'pending' || kycState === 'none'} label={kycLabel} />}
-                desc="Verify to raise your exchange limits.">
-                {kycState === 'none' && <button onClick={() => navigate('/kyc')} className={btnGold}>Start verification</button>}
-                {kycState === 'pending' && <div className="text-[11px] text-muted">Your submission is under review.</div>}
-                {(kycState === 'approved' || kycState === 'verified') && <div className="text-[11px] text-green">Your identity is verified.</div>}
+                desc={t('profile.identity.desc')}>
+                {kycState === 'none' && <button onClick={() => navigate('/kyc')} className={btnGold}>{t('profile.identity.start')}</button>}
+                {kycState === 'pending' && <div className="text-sm text-muted">{t('profile.identity.pending')}</div>}
+                {(kycState === 'approved' || kycState === 'verified') && <div className="text-sm text-green">{t('profile.identity.verified')}</div>}
                 {kycState === 'rejected' && (
-                  <div className="space-y-2.5">
-                    <div className="text-[11px] text-red">Last submission rejected. Re-submit clearer documents.</div>
-                    <button onClick={() => navigate('/kyc')} className={btnGold}>Re-submit</button>
+                  <div className="space-y-3">
+                    <div className="text-sm text-red">{t('profile.identity.rejected')}</div>
+                    <button onClick={() => navigate('/kyc')} className={btnGold}>{t('profile.identity.resubmit')}</button>
                   </div>
                 )}
               </PCard>
-              <PCard title="Email"
-                action={<PChip ok={!!display.email_verified} warn={!display.email_verified} label={display.email_verified ? 'Verified' : 'Unverified'} />}
-                desc={display.email_verified ? `Confirmed ${fmtDate(display.email_verified_at)}.` : 'Check your inbox for the verification link.'} />
+              <PCard title={t('profile.emailCard.title')}
+                action={<PChip ok={!!display.email_verified} warn={!display.email_verified} label={display.email_verified ? t('profile.chip.verified') : t('profile.chip.unverified')} />}
+                desc={display.email_verified ? t('profile.emailCard.confirmed', { date: fmtDate(display.email_verified_at) }) : t('profile.emailCard.checkInbox')} />
             </div>
           )}
 
@@ -811,44 +806,46 @@ export function Profile() {
           {tab === 'wallets' && (
             <div>
               {bals.length === 0 ? (
-                <PCard title="Wallets" desc="Balances appear here after your first exchange.">
-                  <button onClick={() => navigate('/about')} className={btnGold}>Start an exchange</button>
+                <PCard title={t('profile.wallets.title')} desc={t('profile.wallets.empty')}>
+                  <button onClick={() => navigate('/about')} className={btnGold}>{t('profile.wallets.start')}</button>
                 </PCard>
               ) : (
-                <div className="grid sm:grid-cols-2 gap-3">
+                <RevealGroup className="grid gap-4 sm:grid-cols-2">
                   {bals.map((b, i) => (
-                    <PCard key={i}>
-                      <div className="flex items-center justify-between mb-2">
+                    <RevealItem key={i} variant="scaleIn">
+                    <PCard>
+                      <div className="mb-2 flex items-center justify-between">
                         <div>
-                          <div className="font-semibold text-[13px]">{b.currency} <span className="text-muted text-[10.5px] font-normal">{b.name}</span></div>
-                          {b.network && <div className="text-[9.5px] text-muted">{b.network}</div>}
+                          <div className="text-sm font-semibold text-fg">{b.currency} <span className="text-xs font-normal text-muted">{b.name}</span></div>
+                          {b.network && <div className="text-[10px] text-subtle">{b.network}</div>}
                         </div>
-                        <div className="text-[14px] font-bold text-yellow">{b.balance}</div>
+                        <div className="text-base font-semibold text-brand-fg"><CountUp value={Number(b.balance)} decimals={(String(b.balance).split('.')[1] || '').length} /></div>
                       </div>
                       {b.address && (
                         <div className="flex items-center gap-2">
-                          <code className="flex-1 bg-bg border border-border rounded-lg px-2.5 py-1.5 text-[10px] text-muted break-all">{b.address}</code>
-                          <button onClick={() => copy(b.address)} className="px-2.5 py-1.5 border border-border rounded-lg text-[10px] text-muted hover:text-white cursor-pointer">Copy</button>
+                          <code className="flex-1 break-all rounded-lg border border-border bg-bg px-2.5 py-1.5 text-[10px] text-muted">{b.address}</code>
+                          <button onClick={() => copy(b.address)} className="cursor-pointer rounded-lg border border-border px-2.5 py-1.5 text-[10px] text-muted hover:text-fg">{t('profile.copy')}</button>
                         </div>
                       )}
                     </PCard>
+                    </RevealItem>
                   ))}
-                </div>
+                </RevealGroup>
               )}
             </div>
           )}
 
           {/* DANGER */}
           {tab === 'danger' && (
-            <div className="grid md:grid-cols-2 gap-3">
-              <PCard danger title="Freeze account" desc="Blocks your account and all exchanges. Support is needed to reactivate.">
-                <button onClick={blockAccount} className="px-4 py-2 border border-red/40 text-red font-medium text-[12px] rounded-lg hover:bg-red/10 transition-colors cursor-pointer">Freeze account</button>
+            <div className="grid gap-4 md:grid-cols-2">
+              <PCard danger title={t('profile.freeze.title')} desc={t('profile.freeze.desc')}>
+                <button onClick={blockAccount} className="cursor-pointer rounded-xl border border-red/40 px-4 py-2.5 text-sm font-medium text-red transition-colors hover:bg-red/10">{t('profile.freeze.button')}</button>
               </PCard>
-              <PCard danger title="Delete account" desc="Permanently closes your account. Cannot be undone.">
-                <div className="space-y-2.5">
-                  <PInput label='Type "DELETE" to confirm' value={delTxt} onChange={e => setDel(e.target.value)} placeholder="DELETE" />
+              <PCard danger title={t('profile.delete.title')} desc={t('profile.delete.desc')}>
+                <div className="space-y-3">
+                  <PInput label={t('profile.delete.confirmLabel')} value={delTxt} onChange={e => setDel(e.target.value)} placeholder="DELETE" />
                   <button onClick={deleteAccount} disabled={delTxt !== 'DELETE'}
-                    className="px-4 py-2 bg-red text-white font-medium text-[12px] rounded-lg hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40">Delete permanently</button>
+                    className="cursor-pointer rounded-xl bg-red px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40">{t('profile.delete.button')}</button>
                 </div>
               </PCard>
             </div>
@@ -861,6 +858,7 @@ export function Profile() {
 
 // ── AFFILIATE ──
 export function Affiliate() {
+  const t = useT();
   const [stats, setStats]     = useState(null);
   const [today, setToday]     = useState(null);
   const [balance, setBalance] = useState([]);
@@ -873,57 +871,126 @@ export function Affiliate() {
   }, []);
 
   const partnerUrl = `${window.location.origin}?ref=${stats?.partner_link||'yourlink'}`;
+  const copyLink = () => { navigator.clipboard.writeText(partnerUrl); setCopied(true); setTimeout(()=>setCopied(false),2000); };
+
+  const supportStats = [
+    [t('affiliate.stats.referrals'), <CountUp value={stats?.total_referrals ?? 0} />],
+    [t('affiliate.stats.today'), <CountUp value={Number(today?.earned || 0)} decimals={2} />],
+    [t('affiliate.stats.pending'), <CountUp value={Number(stats?.pending_earned || 0)} decimals={2} />],
+  ];
+
+  const STEPS = [
+    [Share2, t('affiliate.steps.share.title'), t('affiliate.steps.share.desc')],
+    [Repeat, t('affiliate.steps.exchange.title'), t('affiliate.steps.exchange.desc')],
+    [Wallet, t('affiliate.steps.earn.title'), t('affiliate.steps.earn.desc')],
+  ];
 
   return (
-    <div className="px-4 md:px-8 py-7 max-w-2xl">
-      <h2 className="text-[18px] font-extrabold mb-1">Affiliate Program</h2>
-      <p className="text-[12px] text-muted mb-6">Earn 0.3% commission on every completed order from your referrals</p>
+    <div className="mx-auto max-w-content px-6 pb-16">
+      {/* ── EARNINGS HERO ── */}
+      <section className="relative overflow-hidden">
+        <RingAccent className="pointer-events-none absolute -right-24 -top-24 hidden h-[440px] w-[440px] opacity-50 lg:block" />
+        <div className="grid gap-10 py-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16 lg:py-16">
+          <div>
+            <div className="mb-4 text-xs font-medium uppercase tracking-[0.16em] text-brand-fg">{t('affiliate.program')}</div>
+            <Reveal variant="fadeUp">
+              <h1 className="text-balance text-4xl font-light leading-[1.05] tracking-tight text-fg md:text-5xl lg:text-6xl">
+                {t('affiliate.hero.pre')} <span className="text-brand-fg">0.3%</span> {t('affiliate.hero.post')}
+              </h1>
+            </Reveal>
+            <p className="mt-6 max-w-md text-lg leading-relaxed text-muted">
+              {t('affiliate.hero.desc')}
+            </p>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {[
-          ['Total Earned', `${stats?.total_earned||'0.00'} USDT`],
-          ['Total Referrals', stats?.total_referrals||0],
-          ['Today',           `${today?.earned||'0.00'} USDT`],
-          ['Pending',         `${stats?.pending_earned||'0.00'} USDT`],
-        ].map(([label,val])=>(
-          <div key={label} className="bg-bg2 border border-border rounded-xl p-4">
-            <div className="text-[11px] text-muted mb-1.5">{label}</div>
-            <div className="text-[16px] font-extrabold text-yellow">{val}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mb-5">
-        <label className="text-[11.5px] text-muted block mb-1.5">Your Partner Link</label>
-        <div className="flex items-center gap-2 bg-bg border border-border rounded-lg px-3.5 py-2.5">
-          <span className="text-yellow font-mono text-[12px] flex-1 break-all">{partnerUrl}</span>
-          <button onClick={()=>{ navigator.clipboard.writeText(partnerUrl); setCopied(true); setTimeout(()=>setCopied(false),2000); }}
-            className="px-3 py-1 text-[11px] bg-bg3 border border-border rounded hover:border-yellow hover:text-yellow transition-colors whitespace-nowrap cursor-pointer">
-            {copied?'✓ Copied!':'Copy'}
-          </button>
-        </div>
-      </div>
-
-      {balance.length>0 && (
-        <div className="mb-5">
-          <div className="text-[13px] font-bold mb-3">Wallet Balances</div>
-          {balance.map((b,i)=>(
-            <div key={i} className="flex justify-between items-center py-2.5 border-b border-border text-[12.5px]">
-              <span className="text-muted">{b.currency} ({b.network})</span>
-              <span className="text-yellow font-bold">{b.balance}</span>
+            <div className="mt-8">
+              <div className="mb-2 text-sm font-medium text-fg">{t('affiliate.referralLink')}</div>
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-bg2 p-1.5 pl-4">
+                <span className="flex-1 truncate font-mono text-sm text-brand-fg">{partnerUrl}</span>
+                <Button size="md" onClick={copyLink} className="shrink-0">
+                  {copied ? <><Check className="h-4 w-4" /> {t('affiliate.copied')}</> : <><Copy className="h-4 w-4" /> {t('affiliate.copy')}</>}
+                </Button>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
 
-      <div className="bg-bg2 border border-border rounded-xl p-4">
-        <h3 className="text-[13px] font-bold text-yellow mb-3">How It Works</h3>
-        {['Share your partner link with friends. When they complete an exchange, you earn 0.3% of the exchange amount.',
-          'Commission is credited to your internal wallet only after orders reach COMPLETED status.',
-          'Minimum withdrawal: 5 USDT. Withdraw via the Partner Withdrawal section.'].map((p,i)=>(
-          <p key={i} className="text-[12px] text-muted leading-relaxed mb-2 last:mb-0">{p}</p>
-        ))}
-      </div>
+          {/* Earnings summary card */}
+          <Reveal variant="scaleIn" className="self-start">
+          <div className="self-start rounded-2xl border border-border bg-bg2 p-6 md:p-7">
+            <div className="text-sm text-subtle">{t('affiliate.totalEarned')}</div>
+            <div className="mt-1 text-4xl font-light tabular-nums text-fg md:text-5xl">
+              <CountUp value={Number(stats?.total_earned || 0)} decimals={2} /> <span className="text-xl text-muted">USDT</span>
+            </div>
+            <div className="mt-7 grid grid-cols-3 gap-4 border-t border-border pt-6">
+              {supportStats.map(([label, val]) => (
+                <div key={label}>
+                  <div className="text-lg font-light tabular-nums text-brand-fg">{val}</div>
+                  <div className="mt-1 text-xs text-subtle">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── HOW IT WORKS ── */}
+      <section className="border-t border-border">
+        <div className="py-14 lg:py-16">
+          <SectionLabel n="01">{t('affiliate.howItWorks')}</SectionLabel>
+          <Reveal variant="fadeUp">
+          <ol className="relative grid gap-10 md:grid-cols-3 md:gap-8">
+            <div className="pointer-events-none absolute left-0 right-0 top-6 hidden h-px bg-border md:block" aria-hidden="true" />
+            {STEPS.map(([Icon, title, desc], i) => (
+              <li key={title} className="relative">
+                <div className="mb-5 flex items-center gap-3">
+                  <span className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-bg2 text-brand-fg">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="font-mono text-sm tabular-nums text-subtle">{String(i + 1).padStart(2, '0')}</span>
+                </div>
+                <h3 className="mb-2 text-lg font-normal text-fg">{title}</h3>
+                <p className="text-sm leading-relaxed text-muted">{desc}</p>
+              </li>
+            ))}
+          </ol>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── WALLET + PAYOUT ── */}
+      <section className="border-t border-border">
+        <div className="grid gap-10 py-14 md:grid-cols-2 md:gap-16 lg:py-16">
+          <div>
+            <SectionLabel n="02">{t('affiliate.yourBalances')}</SectionLabel>
+            {balance.length > 0 ? (
+              <Reveal variant="fadeUp" className="divide-y divide-border rounded-2xl border border-border bg-bg2">
+                {balance.map((b, i) => (
+                  <div key={i} className="flex items-center justify-between px-5 py-4">
+                    <div>
+                      <div className="text-sm font-medium text-fg">{b.currency}</div>
+                      {b.network && <div className="text-xs text-subtle">{b.network}</div>}
+                    </div>
+                    <div className="text-lg font-light tabular-nums text-brand-fg"><CountUp value={Number(b.balance)} decimals={(String(b.balance).split('.')[1] || '').length} /></div>
+                  </div>
+                ))}
+              </Reveal>
+            ) : (
+              <div className="rounded-2xl border border-border bg-bg2 p-8 text-center text-sm text-muted">
+                {t('affiliate.balancesEmpty')}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <SectionLabel n="03">{t('affiliate.payoutTerms')}</SectionLabel>
+            <div className="space-y-4 text-sm leading-relaxed text-muted">
+              <p><span className="font-medium text-fg">{t('affiliate.terms.perExchange.head')}</span> {t('affiliate.terms.perExchange.body')}</p>
+              <p><span className="font-medium text-fg">{t('affiliate.terms.onCompletion.head')}</span> {t('affiliate.terms.onCompletion.body')}</p>
+              <p><span className="font-medium text-fg">{t('affiliate.terms.minimum.head')}</span> {t('affiliate.terms.minimum.body')}</p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

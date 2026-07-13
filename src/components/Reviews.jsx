@@ -1,21 +1,24 @@
 import { useState, useEffect } from 'react';
+import { Star, CheckCircle2, AlertTriangle, X, PenLine } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
-function Stars({ rating, size = 'text-[14px]', interactive = false, onChange }) {
+function Stars({ rating, size = 15, interactive = false, onChange }) {
   const [hover, setHover] = useState(0);
   return (
     <div className="flex gap-0.5">
-      {[1,2,3,4,5].map(s => (
-        <span key={s}
-          className={`${size} cursor-${interactive ? 'pointer' : 'default'} transition-colors select-none`}
-          style={{ color: s <= (hover || rating) ? '#F0B90B' : '#2B3139' }}
-          onMouseEnter={() => interactive && setHover(s)}
-          onMouseLeave={() => interactive && setHover(0)}
-          onClick={() => interactive && onChange?.(s)}>
-          ★
-        </span>
-      ))}
+      {[1,2,3,4,5].map(s => {
+        const on = s <= (hover || rating);
+        return (
+          <button key={s} type="button" disabled={!interactive}
+            onMouseEnter={() => interactive && setHover(s)}
+            onMouseLeave={() => interactive && setHover(0)}
+            onClick={() => interactive && onChange?.(s)}
+            className={interactive ? 'cursor-pointer' : 'cursor-default'}>
+            <Star style={{ width: size, height: size }} className={`transition-colors ${on ? 'fill-warn text-warn' : 'fill-transparent text-border'}`} />
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -27,10 +30,10 @@ function ReviewCard({ review }) {
   const date = new Date(review.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
   return (
-    <div className="bg-bg2 border border-border rounded-xl p-4 hover:border-yellow/20 transition-colors">
+    <div className="bg-bg2 border border-border rounded-xl p-4 hover:border-brand/20 transition-colors">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-yellow/10 border border-yellow/20 flex items-center justify-center text-yellow font-bold text-[11px] shrink-0">
+          <div className="w-8 h-8 rounded-full bg-brand/10 border border-brand/20 flex items-center justify-center text-brand-fg font-bold text-[11px] shrink-0">
             {initials}
           </div>
           <div>
@@ -38,7 +41,7 @@ function ReviewCard({ review }) {
             <div className="text-muted text-[10px]">{date}</div>
           </div>
         </div>
-        <Stars rating={review.rating} size="text-[12px]" />
+        <Stars rating={review.rating} size={14} />
       </div>
       <p className="text-muted text-[11.5px] leading-relaxed">{review.text}</p>
     </div>
@@ -67,7 +70,7 @@ function ReviewForm({ onSubmitted }) {
     <div className="bg-bg2 border border-border rounded-xl p-5 text-center">
       <div className="text-[13px] font-semibold mb-1">Leave a Review</div>
       <p className="text-muted text-[11px] mb-3">You need to be logged in to submit a review</p>
-      <a href="/login" className="px-4 py-2 bg-yellow text-black text-[11px] font-bold rounded-lg inline-block hover:bg-yellow-d transition-colors">
+      <a href="/login" className="px-4 py-2 bg-brand text-white text-[11px] font-bold rounded-lg inline-block hover:bg-brand-h transition-colors">
         Log In
       </a>
     </div>
@@ -75,7 +78,7 @@ function ReviewForm({ onSubmitted }) {
 
   if (done) return (
     <div className="bg-green/10 border border-green/20 rounded-xl p-5 text-center">
-      <div className="text-2xl mb-2">✅</div>
+      <CheckCircle2 className="mx-auto mb-2 h-7 w-7 text-green" />
       <div className="font-bold text-[13px] text-green mb-1">Review Submitted!</div>
       <p className="text-muted text-[11px]">Your review is pending admin approval and will appear shortly.</p>
     </div>
@@ -86,18 +89,18 @@ function ReviewForm({ onSubmitted }) {
       <div className="font-bold text-[13px] mb-4">Write a Review</div>
       <div className="mb-3">
         <div className="text-[10px] text-muted font-semibold uppercase tracking-wide mb-2">Your Rating *</div>
-        <Stars rating={rating} size="text-[24px]" interactive onChange={setRating} />
+        <Stars rating={rating} size={28} interactive onChange={setRating} />
       </div>
       <div className="mb-3">
         <div className="text-[10px] text-muted font-semibold uppercase tracking-wide mb-1.5">Your Review *</div>
         <textarea value={text} onChange={e => setText(e.target.value)} rows={4}
           placeholder="Share your experience with SwiftSwap…"
-          className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-white outline-none focus:border-yellow transition-colors resize-none" />
+          className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-[12px] text-fg outline-none focus:border-brand transition-colors resize-none" />
         <div className="text-[10px] text-muted mt-1">{text.length}/500 characters</div>
       </div>
-      {error && <div className="text-red text-[11px] mb-3">⚠ {error}</div>}
+      {error && <div className="flex items-center gap-1 text-red text-[11px] mb-3"><AlertTriangle className="h-3 w-3" /> {error}</div>}
       <button onClick={submit} disabled={sending}
-        className="w-full py-2.5 bg-yellow text-black font-bold text-[12px] rounded-lg cursor-pointer hover:bg-yellow-d transition-colors disabled:opacity-50">
+        className="w-full py-2.5 bg-brand text-white font-bold text-[12px] rounded-lg cursor-pointer hover:bg-brand-h transition-colors disabled:opacity-50">
         {sending ? 'Submitting…' : 'Submit Review'}
       </button>
       <p className="text-[10px] text-muted text-center mt-2">Reviews are moderated before appearing publicly</p>
@@ -126,15 +129,15 @@ export default function Reviews() {
           <h2 className="text-[18px] font-extrabold">Customer Reviews</h2>
           {avg && (
             <div className="flex items-center gap-2 mt-1">
-              <Stars rating={Math.round(avg)} size="text-[13px]" />
-              <span className="text-yellow font-bold text-[13px]">{avg}</span>
+              <Stars rating={Math.round(avg)} size={15} />
+              <span className="text-warn font-bold text-[13px]">{avg}</span>
               <span className="text-muted text-[11px]">({reviews.length} review{reviews.length !== 1 ? 's' : ''})</span>
             </div>
           )}
         </div>
         <button onClick={() => setForm(f => !f)}
-          className="px-4 py-2 border border-yellow text-yellow text-[11px] font-bold rounded-lg hover:bg-yellow hover:text-black transition-colors cursor-pointer bg-transparent">
-          {showForm ? '✕ Close' : '✏️ Write Review'}
+          className="flex items-center gap-1.5 px-4 py-2 border border-brand text-brand-fg text-[11px] font-bold rounded-lg hover:bg-brand hover:text-white transition-colors cursor-pointer bg-transparent">
+          {showForm ? <><X className="h-3.5 w-3.5" /> Close</> : <><PenLine className="h-3.5 w-3.5" /> Write review</>}
         </button>
       </div>
 
@@ -150,7 +153,7 @@ export default function Reviews() {
         <div className="text-muted text-[11px] animate-pulse py-6">Loading reviews…</div>
       ) : reviews.length === 0 ? (
         <div className="text-center py-10 text-muted">
-          <div className="text-3xl mb-3 opacity-40">⭐</div>
+          <Star className="mx-auto mb-3 h-8 w-8 opacity-40" />
           <div className="text-[12px]">No reviews yet — be the first to share your experience!</div>
         </div>
       ) : reviews.length <= 3 ? (
@@ -160,8 +163,8 @@ export default function Reviews() {
       ) : (
         <div className="ss-rev-wrap relative overflow-hidden">
           {/* edge fades */}
-          <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-16 z-10" style={{ background: 'linear-gradient(90deg,#0B0E11,transparent)' }} />
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-16 z-10" style={{ background: 'linear-gradient(270deg,#0B0E11,transparent)' }} />
+          <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-16 z-10" style={{ background: 'linear-gradient(90deg,var(--surface-0),transparent)' }} />
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-16 z-10" style={{ background: 'linear-gradient(270deg,var(--surface-0),transparent)' }} />
           <div className="ss-rev-track flex gap-3 w-max py-1" style={{ animationDuration: `${Math.max(24, reviews.length * 6)}s` }}>
             {[...reviews, ...reviews].map((r, i) => (
               <div key={i} className="w-[300px] shrink-0"><ReviewCard review={r} /></div>

@@ -1,105 +1,73 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
+import { useT } from '../lib/i18n';
+import { Logo } from '../components/Logo';
+import { Field, Input, PasswordInput, Button, Alert } from '../components/ui/kit';
+import { SuccessCheck } from '../lib/motion';
 
-const InputField = ({label, type='text', value, onChange, placeholder}) => {
-  const isPassword = type === 'password';
-  const [show, setShow] = useState(false);
-  const inputType = isPassword ? (show ? 'text' : 'password') : type;
+// Atmospheric backdrop: concentric hairline rings with two brand arcs slowly
+// drifting in opposite directions, plus soft brand glow and a whisper of grid.
+// The rate-lock ring motif, dissolved into ambient motion behind the glass card.
+function AuthBackdrop() {
   return (
-    <div>
-      <label className="text-[11.5px] text-muted block mb-1.5">{label}</label>
-      <div className="relative">
-        <input type={inputType} value={value} onChange={onChange} placeholder={placeholder}
-          className={`w-full bg-bg border border-border rounded-lg px-3.5 py-2.5 ${isPassword ? 'pr-11' : ''} text-white text-[13px] outline-none placeholder-muted focus:border-yellow transition-colors`} />
-        {isPassword && (
-          <button type="button" onClick={() => setShow(s => !s)} tabIndex={-1}
-            aria-label={show ? 'Hide password' : 'Show password'}
-            className="absolute inset-y-0 right-0 px-3 flex items-center text-muted hover:text-white cursor-pointer bg-transparent border-none">
-            {show ? (
-              // eye-off
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                <line x1="1" y1="1" x2="23" y2="23" />
-              </svg>
-            ) : (
-              // eye
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            )}
-          </button>
-        )}
-      </div>
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* Base wash: a brand-tinted radial pooling toward the card, fading to surface. */}
+      <div className="absolute inset-0"
+        style={{ background: 'radial-gradient(ellipse 100% 80% at 50% 40%, color-mix(in oklab, var(--brand) 30%, var(--surface-0)) 0%, var(--surface-0) 70%)' }} />
+
+      {/* Glow: one warm brand pool behind the card, two cooler ones at the edges. */}
+      <div className="absolute left-1/2 top-1/2 h-[760px] w-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/40 blur-[110px]" />
+      <div className="absolute -left-16 top-0 h-[460px] w-[460px] rounded-full bg-brand-h/35 blur-[110px]" />
+      <div className="absolute -right-16 bottom-0 h-[460px] w-[460px] rounded-full bg-brand-fg/30 blur-[110px]" />
+
+      {/* Concentric rings with three bright arcs sweeping at different rates. */}
+      <svg className="absolute left-1/2 top-1/2 h-[1120px] w-[1120px] -translate-x-1/2 -translate-y-1/2" viewBox="0 0 1000 1000" fill="none">
+        {[480, 390, 300, 210, 120].map((r) => (
+          <circle key={r} cx="500" cy="500" r={r} stroke="var(--brand-fg)" strokeOpacity="0.28" strokeWidth="1" />
+        ))}
+        <g className="motion-safe:animate-[spin_30s_linear_infinite]" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+          <circle cx="500" cy="500" r="390" stroke="var(--brand-fg)" strokeWidth="3" strokeLinecap="round" strokeDasharray="300 2150" strokeOpacity="0.9" />
+        </g>
+        <g className="motion-safe:animate-[spin_22s_linear_infinite_reverse]" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+          <circle cx="500" cy="500" r="300" stroke="var(--brand-fg)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="200 1685" strokeOpacity="0.85" />
+        </g>
+        <g className="motion-safe:animate-[spin_38s_linear_infinite]" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+          <circle cx="500" cy="500" r="480" stroke="var(--brand-fg)" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="160 2855" strokeOpacity="0.7" />
+        </g>
+      </svg>
+
+      <div className="absolute inset-0 opacity-[0.03]"
+        style={{ backgroundImage: 'linear-gradient(var(--brand) 1px,transparent 1px),linear-gradient(90deg,var(--brand) 1px,transparent 1px)', backgroundSize: '46px 46px' }} />
     </div>
   );
-};
+}
 
-// Brand panel shown to the left of the auth forms on large screens only
-function AuthBrandPanel() {
+// A single frosted glass card, centred over the animated backdrop.
+function AuthShell({ children }) {
   return (
-    <div className="hidden lg:flex flex-1 relative overflow-hidden flex-col justify-center px-14"
-      style={{ background: 'radial-gradient(ellipse at 25% 25%, #17130a 0%, #100d07 40%, #0B0E11 72%)' }}>
-      <div className="pointer-events-none absolute -top-24 -left-12 w-[440px] h-[440px] rounded-full"
-        style={{ background: 'radial-gradient(circle, rgba(240,185,11,0.10), transparent 70%)' }} />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.03]"
-        style={{ backgroundImage: 'linear-gradient(#F0B90B 1px,transparent 1px),linear-gradient(90deg,#F0B90B 1px,transparent 1px)', backgroundSize: '36px 36px' }} />
-      {/* fade the right edge into the form side so the seam disappears */}
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-40"
-        style={{ background: 'linear-gradient(90deg, transparent, #0B0E11)' }} />
-
-      <div className="relative max-w-[460px]">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-9 h-9 rounded-lg bg-yellow flex items-center justify-center text-black font-black text-lg">→</div>
-          <span className="text-[20px] font-extrabold">SwiftSwap</span>
-        </div>
-
-        <h1 className="text-[30px] font-extrabold leading-tight mb-3">
-          Automatic crypto exchange <span className="text-yellow">you can trust</span>
-        </h1>
-        <p className="text-muted text-[13px] leading-relaxed mb-8 max-w-[380px]">
-          Crypto to crypto, crypto to fiat, fiat to crypto — no registration wait. Send and receive within minutes.
-        </p>
-
-        <div className="grid grid-cols-2 gap-3 mb-7 max-w-[360px]">
-          {[['93+','Exchange pairs'],['24/7','Always online'],['5–60m','Processing time'],['0','Security incidents']].map(([n,l],i)=>(
-            <div key={i} className="bg-bg2/60 border border-border rounded-xl px-4 py-3">
-              <div className="text-yellow font-extrabold text-[18px]">{n}</div>
-              <div className="text-muted text-[10.5px]">{l}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap gap-2 max-w-[400px]">
-          {['Non-custodial','Instant swaps','No sign-up wait','24/7 human support'].map((b,i)=>(
-            <span key={i} className="inline-flex items-center gap-1.5 text-[11px] text-white bg-bg2/60 border border-border rounded-full px-3 py-1.5">
-              <span className="text-green">✓</span>{b}
-            </span>
-          ))}
-        </div>
+    <div className="relative flex min-h-[calc(100dvh-7rem)] items-center justify-center overflow-hidden px-5 py-14">
+      <AuthBackdrop />
+      <div className="auth-scale animate-fade-in-up relative z-10 w-full max-w-[400px] overflow-hidden rounded-3xl border border-fg/10 bg-bg2/70 p-7 shadow-[0_28px_90px_rgba(0,0,0,0.4)] backdrop-blur-2xl backdrop-saturate-150 md:p-8">
+        {/* Top sheen — the optical glass highlight */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/60 to-transparent" />
+        <Link to="/overview" className="mb-7 inline-flex items-center gap-2">
+          <Logo className="h-5" />
+          <span className="text-sm font-bold tracking-tight text-fg">SwiftSwap</span>
+        </Link>
+        {children}
       </div>
     </div>
   );
 }
 
-// Full-viewport split shell. Fits the screen; only the form column scrolls if tall.
-// On phones there is no card panel — fields sit directly on the background.
-function AuthShell({ children }) {
+function AuthHeader({ title, sub }) {
   return (
-    <div className="flex overflow-hidden" style={{ height: 'calc(100dvh - 56px)' }}>
-      <AuthBrandPanel />
-      <div className="flex-1 overflow-y-auto">
-        <div className="min-h-full flex flex-col items-center justify-center px-5 py-10">
-          {/* mobile brand (brand panel is hidden on small screens) */}
-          <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 rounded-lg bg-yellow flex items-center justify-center text-black font-black">→</div>
-            <span className="text-[18px] font-extrabold">SwiftSwap</span>
-          </div>
-          {children}
-        </div>
-      </div>
+    <div className="mb-5">
+      <h2 className="text-[20px] font-light leading-tight text-fg">{title}</h2>
+      {sub && <p className="mt-1.5 text-[12px] text-muted">{sub}</p>}
     </div>
   );
 }
@@ -113,9 +81,10 @@ export function Login() {
   const navigate    = useNavigate();
   const location    = useLocation();
   const from        = location.state?.from || '/overview';
+  const t           = useT();
 
   const handleSubmit = async () => {
-    if (!email||!password) { setError('Please fill in all fields'); return; }
+    if (!email||!password) { setError(t('auth.errors.fillAll')); return; }
     setError(''); setLoading(true);
     const res = await login(email, password);
     setLoading(false);
@@ -127,28 +96,34 @@ export function Login() {
         navigate(from, {replace:true});
       }
     }
-    else setError(res.error?.message || 'Invalid email or password');
+    else setError(res.error?.message || t('auth.errors.invalidCreds'));
   };
 
   return (
     <AuthShell>
-      <div className="w-full max-w-[380px]">
-        <h2 className="text-xl font-extrabold mb-1">Welcome back</h2>
-        <p className="text-[12px] text-muted mb-6">Log in to your SwiftSwap account to track orders</p>
-        <div className="flex flex-col gap-3.5">
-          <InputField label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com" />
-          <InputField label="Password" type="password" value={password} onChange={e=>setPass(e.target.value)} placeholder="••••••••" />
-          {error && <div className="text-red text-[11.5px]">{error}</div>}
-          <div className="text-right -mt-1">
-            <Link to="/forgot-password" className="text-[11.5px] text-yellow hover:underline">Forgot your password?</Link>
+      <div className="w-full">
+        <AuthHeader title={t('auth.login.title')} sub={t('auth.login.sub')} />
+        <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+          <Field label={t('auth.login.email')}>
+            <Input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" />
+          </Field>
+          <Field label={t('auth.login.password')}>
+            <PasswordInput value={password} onChange={e=>setPass(e.target.value)} placeholder="••••••••" />
+          </Field>
+          {error && <Alert>{error}</Alert>}
+          <div className="-mt-1 text-right">
+            <Link to="/forgot-password" className="text-xs text-brand-fg hover:underline">{t('auth.login.forgot')}</Link>
           </div>
-          <button onClick={handleSubmit} disabled={loading}
-            className="w-full py-3 bg-yellow text-black font-extrabold text-[13px] rounded-lg hover:bg-yellow-d transition-colors disabled:opacity-60 cursor-pointer mt-1">
-            {loading ? 'Logging in…' : 'Log In'}
-          </button>
+          <Button size="lg" type="submit" disabled={loading} className="py-3">
+            {loading ? t('auth.login.submitting') : t('auth.login.submit')}
+          </Button>
+        </form>
+        <div className="mt-5 text-center text-sm text-muted">
+          {t('auth.login.noAccount')} <Link to="/register" className="text-brand-fg hover:underline">{t('auth.login.signup')}</Link>
         </div>
-        <div className="text-center mt-4 text-[12px] text-muted">Don't have an account? <Link to="/register" className="text-yellow hover:underline">Sign Up</Link></div>
-        <div className="text-center mt-2 text-[12px] text-muted"><Link to="/about" className="hover:text-yellow">← Back to exchange</Link></div>
+        <div className="mt-2 text-center text-sm text-muted">
+          <Link to="/about" className="hover:text-brand-fg">{t('auth.login.back')}</Link>
+        </div>
       </div>
     </AuthShell>
   );
@@ -160,36 +135,45 @@ export function Register() {
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate     = useNavigate();
+  const t            = useT();
   const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
 
   const handleSubmit = async () => {
-    if (!form.name||!form.email||!form.password) { setError('Please fill in all fields'); return; }
-    if (form.password!==form.password_confirmation) { setError('Passwords do not match'); return; }
-    if (form.password.length<8) { setError('Password must be at least 8 characters'); return; }
+    if (!form.name||!form.email||!form.password) { setError(t('auth.errors.fillAll')); return; }
+    if (form.password!==form.password_confirmation) { setError(t('auth.errors.passMismatch')); return; }
+    if (form.password.length<8) { setError(t('auth.errors.passShort')); return; }
     setError(''); setLoading(true);
     const res = await register(form);
     setLoading(false);
     if (res.success) navigate('/login');
-    else setError(res.error?.message||'Registration failed. Please try again.');
+    else setError(res.error?.message||t('auth.errors.regFailed'));
   };
 
   return (
     <AuthShell>
-      <div className="w-full max-w-[380px]">
-        <h2 className="text-xl font-extrabold mb-1">Create account</h2>
-        <p className="text-[12px] text-muted mb-6">Join SwiftSwap and start exchanging cryptocurrencies instantly</p>
-        <div className="flex flex-col gap-3.5">
-          <InputField label="Full Name" value={form.name} onChange={set('name')} placeholder="John Doe" />
-          <InputField label="Email" type="email" value={form.email} onChange={set('email')} placeholder="your@email.com" />
-          <InputField label="Password" type="password" value={form.password} onChange={set('password')} placeholder="Min. 8 characters" />
-          <InputField label="Confirm Password" type="password" value={form.password_confirmation} onChange={set('password_confirmation')} placeholder="••••••••" />
-          {error && <div className="text-red text-[11.5px]">{error}</div>}
-          <button onClick={handleSubmit} disabled={loading}
-            className="w-full py-3 bg-yellow text-black font-extrabold text-[13px] rounded-lg hover:bg-yellow-d transition-colors disabled:opacity-60 cursor-pointer mt-1">
-            {loading ? 'Creating account…' : 'Create Account'}
-          </button>
+      <div className="w-full">
+        <AuthHeader title={t('auth.register.title')} sub={t('auth.register.sub')} />
+        <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+          <Field label={t('auth.register.name')}>
+            <Input value={form.name} onChange={set('name')} placeholder={t('auth.register.namePlaceholder')} />
+          </Field>
+          <Field label={t('auth.register.email')}>
+            <Input type="email" value={form.email} onChange={set('email')} placeholder="you@email.com" />
+          </Field>
+          <Field label={t('auth.register.password')}>
+            <PasswordInput value={form.password} onChange={set('password')} placeholder={t('auth.register.passwordPlaceholder')} />
+          </Field>
+          <Field label={t('auth.register.confirm')}>
+            <PasswordInput value={form.password_confirmation} onChange={set('password_confirmation')} placeholder="••••••••" />
+          </Field>
+          {error && <Alert>{error}</Alert>}
+          <Button size="lg" type="submit" disabled={loading} className="py-3">
+            {loading ? t('auth.register.submitting') : t('auth.register.submit')}
+          </Button>
+        </form>
+        <div className="mt-5 text-center text-sm text-muted">
+          {t('auth.register.haveAccount')} <Link to="/login" className="text-brand-fg hover:underline">{t('auth.register.signin')}</Link>
         </div>
-        <div className="text-center mt-4 text-[12px] text-muted">Already have an account? <Link to="/login" className="text-yellow hover:underline">Log In</Link></div>
       </div>
     </AuthShell>
   );
@@ -200,39 +184,45 @@ export function ForgotPassword() {
   const [sent, setSent]   = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const t = useT();
 
   const submit = async () => {
-    if (!email) { setError('Please enter your email'); return; }
+    if (!email) { setError(t('auth.errors.enterEmail')); return; }
     setError(''); setLoading(true);
     const res = await api.resetPassword({ email });
     setLoading(false);
     // Backend intentionally returns generic success (no email enumeration)
     if (res?.success) setSent(true);
-    else setError(res?.error?.message || 'Something went wrong. Please try again.');
+    else setError(res?.error?.message || t('auth.errors.generic'));
   };
 
   return (
     <AuthShell>
-      <div className="w-full max-w-[380px]">
-        <h2 className="text-xl font-extrabold mb-1">Forgot password</h2>
-        <p className="text-[12px] text-muted mb-6">Enter your email and we'll send you a link to reset your password.</p>
+      <div className="w-full">
+        <AuthHeader title={t('auth.forgot.title')} sub={t('auth.forgot.sub')} />
         {sent ? (
           <div className="space-y-4">
-            <div className="bg-green/10 border border-green/20 rounded-lg px-4 py-3 text-[12px] text-green">
-              If an account exists for <b>{email}</b>, a reset link is on its way. Check your inbox (and spam).
+            <div className="flex justify-center">
+              <SuccessCheck size={36} className="text-green" />
             </div>
-            <Link to="/login" className="block text-center text-[12px] text-yellow hover:underline">← Back to log in</Link>
+            <Alert tone="success">
+              {t('auth.forgot.sent', { email })}
+            </Alert>
+            <Link to="/login" className="block text-center text-sm text-brand-fg hover:underline">{t('auth.forgot.back')}</Link>
           </div>
         ) : (
-          <div className="flex flex-col gap-3.5">
-            <InputField label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="your@email.com" />
-            {error && <div className="text-red text-[11.5px]">{error}</div>}
-            <button onClick={submit} disabled={loading}
-              className="w-full py-3 bg-yellow text-black font-extrabold text-[13px] rounded-lg hover:bg-yellow-d transition-colors disabled:opacity-60 cursor-pointer mt-1">
-              {loading ? 'Sending…' : 'Send reset link'}
-            </button>
-            <div className="text-center mt-1 text-[12px] text-muted"><Link to="/login" className="text-yellow hover:underline">← Back to log in</Link></div>
-          </div>
+          <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+            <Field label={t('auth.forgot.email')}>
+              <Input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" />
+            </Field>
+            {error && <Alert>{error}</Alert>}
+            <Button size="lg" type="submit" disabled={loading} className="py-3">
+              {loading ? t('auth.forgot.submitting') : t('auth.forgot.submit')}
+            </Button>
+            <div className="text-center text-sm text-muted">
+              <Link to="/login" className="text-brand-fg hover:underline">{t('auth.forgot.back')}</Link>
+            </div>
+          </form>
         )}
       </div>
     </AuthShell>
@@ -250,6 +240,7 @@ export function ResetPassword() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [done, setDone]         = useState(false);
+  const t = useT();
 
   useEffect(() => {
     if (!token) { setChecking(false); setValid(false); return; }
@@ -260,50 +251,53 @@ export function ResetPassword() {
   }, [token]);
 
   const submit = async () => {
-    if (pw.password.length < 8) { setError('Password must be at least 8 characters'); return; }
-    if (pw.password !== pw.confirm) { setError('Passwords do not match'); return; }
+    if (pw.password.length < 8) { setError(t('auth.errors.passShort')); return; }
+    if (pw.password !== pw.confirm) { setError(t('auth.errors.passMismatch')); return; }
     setError(''); setLoading(true);
     const res = await api.resetPasswordConfirm({ token, password: pw.password });
     setLoading(false);
     if (res?.success) { setDone(true); setTimeout(() => navigate('/login'), 2200); }
-    else setError(res?.error?.message || 'Could not reset password. The link may have expired.');
+    else setError(res?.error?.message || t('auth.errors.resetFailed'));
   };
 
   return (
     <AuthShell>
-      <div className="w-full max-w-[380px]">
-        <h2 className="text-xl font-extrabold mb-1">Reset password</h2>
+      <div className="w-full">
+        <AuthHeader title={t('auth.reset.title')} />
         {checking ? (
-          <p className="text-[12px] text-muted mt-4 animate-pulse">Checking your link…</p>
+          <p className="animate-pulse text-sm text-muted">{t('auth.reset.checking')}</p>
         ) : !valid ? (
-          <div className="space-y-4 mt-4">
-            <div className="bg-red/10 border border-red/20 rounded-lg px-4 py-3 text-[12px] text-red">
-              This reset link is invalid or has expired. Please request a new one.
-            </div>
-            <Link to="/forgot-password" className="block text-center text-[12px] text-yellow hover:underline">Request a new link</Link>
+          <div className="space-y-4">
+            <Alert>{t('auth.reset.invalid')}</Alert>
+            <Link to="/forgot-password" className="block text-center text-sm text-brand-fg hover:underline">{t('auth.reset.requestNew')}</Link>
           </div>
         ) : done ? (
-          <div className="bg-green/10 border border-green/20 rounded-lg px-4 py-3 text-[12px] text-green mt-4">
-            ✅ Password updated. Redirecting you to log in…
+          <div className="space-y-4">
+            <div className="flex justify-center">
+              <SuccessCheck className="text-green" />
+            </div>
+            <Alert tone="success"><span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> {t('auth.reset.done')}</span></Alert>
           </div>
         ) : (
-          <>
-            <p className="text-[12px] text-muted mb-6">Choose a new password for your account.</p>
-            <div className="flex flex-col gap-3.5">
-              <InputField label="New password" type="password" value={pw.password} onChange={e=>setPw(p=>({...p,password:e.target.value}))} placeholder="Min. 8 characters" />
-              <InputField label="Confirm password" type="password" value={pw.confirm} onChange={e=>setPw(p=>({...p,confirm:e.target.value}))} placeholder="••••••••" />
-              {error && <div className="text-red text-[11.5px]">{error}</div>}
-              <button onClick={submit} disabled={loading}
-                className="w-full py-3 bg-yellow text-black font-extrabold text-[13px] rounded-lg hover:bg-yellow-d transition-colors disabled:opacity-60 cursor-pointer mt-1">
-                {loading ? 'Updating…' : 'Update password'}
-              </button>
-            </div>
-          </>
+          <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+            <p className="-mt-2 text-sm text-muted">{t('auth.reset.intro')}</p>
+            <Field label={t('auth.reset.newPassword')}>
+              <PasswordInput value={pw.password} onChange={e=>setPw(p=>({...p,password:e.target.value}))} placeholder={t('auth.reset.passwordPlaceholder')} />
+            </Field>
+            <Field label={t('auth.reset.confirm')}>
+              <PasswordInput value={pw.confirm} onChange={e=>setPw(p=>({...p,confirm:e.target.value}))} placeholder="••••••••" />
+            </Field>
+            {error && <Alert>{error}</Alert>}
+            <Button size="lg" type="submit" disabled={loading} className="py-3">
+              {loading ? t('auth.reset.submitting') : t('auth.reset.submit')}
+            </Button>
+          </form>
         )}
       </div>
     </AuthShell>
   );
 }
+
 export function VerifyEmail() {
   const [params] = useSearchParams();
   const token = params.get('token');
@@ -311,6 +305,7 @@ export function VerifyEmail() {
   const [resendEmail, setResendEmail] = useState('');
   const [resendMsg, setResendMsg] = useState('');
   const [resending, setResending] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     if (!token) { setState('error'); return; }
@@ -320,50 +315,52 @@ export function VerifyEmail() {
   }, [token]);
 
   const resend = async () => {
-    if (!resendEmail) { setResendMsg('Enter your email'); return; }
+    if (!resendEmail) { setResendMsg(t('auth.errors.enterEmailShort')); return; }
     setResending(true); setResendMsg('');
     await api.resendVerification({ email: resendEmail });
     setResending(false);
-    setResendMsg('If that email needs verification, a new link has been sent. Check your inbox.');
+    setResendMsg(t('auth.verify.resendResult'));
   };
 
   return (
     <AuthShell>
-      <div className="w-full max-w-[380px]">
-        <h2 className="text-xl font-extrabold mb-1">Email verification</h2>
+      <div className="w-full">
+        <AuthHeader title={t('auth.verify.title')} />
 
-        {state === 'checking' && (
-          <p className="text-[12px] text-muted mb-6">Verifying your email…</p>
-        )}
+        {state === 'checking' && <p className="text-sm text-muted">{t('auth.verify.checking')}</p>}
 
         {state === 'success' && (
-          <>
-            <div className="bg-green/10 border border-green/30 rounded-lg px-4 py-3 mb-5">
-              <div className="text-green font-bold text-[13px] mb-1">✓ Email verified</div>
-              <div className="text-[12px] text-muted">Your account is now fully activated — you can create exchanges.</div>
+          <div className="space-y-5">
+            <div className="flex justify-center">
+              <SuccessCheck className="text-green" />
             </div>
-            <Link to="/login" className="block w-full text-center py-3 bg-yellow text-black font-extrabold text-[13px] rounded-lg hover:bg-yellow-d transition-colors">
-              Continue to login
+            <Alert tone="success">
+              <div className="mb-1 flex items-center gap-1.5 font-semibold"><CheckCircle2 className="h-4 w-4" /> {t('auth.verify.successTitle')}</div>
+              <div className="text-muted">{t('auth.verify.successBody')}</div>
+            </Alert>
+            <Link to="/login" className="block">
+              <Button size="lg" className="py-3">{t('auth.verify.continue')}</Button>
             </Link>
-          </>
+          </div>
         )}
 
         {state === 'error' && (
-          <>
-            <div className="bg-red/10 border border-red/30 rounded-lg px-4 py-3 mb-5">
-              <div className="text-red font-bold text-[13px] mb-1">Verification link invalid or expired</div>
-              <div className="text-[12px] text-muted">Enter your email below and we'll send a fresh verification link.</div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <InputField label="Email" type="email" value={resendEmail} onChange={e=>setResendEmail(e.target.value)} placeholder="your@email.com" />
-              {resendMsg && <div className="text-[11.5px] text-muted">{resendMsg}</div>}
-              <button onClick={resend} disabled={resending}
-                className="w-full py-3 bg-yellow text-black font-extrabold text-[13px] rounded-lg hover:bg-yellow-d transition-colors disabled:opacity-60 cursor-pointer">
-                {resending ? 'Sending…' : 'Resend verification email'}
-              </button>
-              <Link to="/login" className="text-center text-[11.5px] text-muted hover:text-white">Back to login</Link>
-            </div>
-          </>
+          <div className="space-y-5">
+            <Alert>
+              <div className="mb-1 font-semibold">{t('auth.verify.errorTitle')}</div>
+              <div className="text-muted">{t('auth.verify.errorBody')}</div>
+            </Alert>
+            <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); resend(); }}>
+              <Field label={t('auth.verify.email')}>
+                <Input type="email" value={resendEmail} onChange={e=>setResendEmail(e.target.value)} placeholder="you@email.com" />
+              </Field>
+              {resendMsg && <p className="text-xs text-muted">{resendMsg}</p>}
+              <Button size="lg" type="submit" disabled={resending} className="py-3">
+                {resending ? t('auth.verify.resending') : t('auth.verify.resend')}
+              </Button>
+              <Link to="/login" className="text-center text-sm text-muted hover:text-fg">{t('auth.verify.back')}</Link>
+            </form>
+          </div>
         )}
       </div>
     </AuthShell>
