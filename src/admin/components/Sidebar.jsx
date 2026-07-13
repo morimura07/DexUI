@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, ClipboardList, Users, Wallet, Repeat, BarChart3,
+  LayoutDashboard, ClipboardList, Users, Wallet, Repeat, BarChart3, Landmark,
   LifeBuoy, Star, ScrollText, Settings, ArrowLeft, LogOut, X,
 } from 'lucide-react';
 import { motion, nudge } from '../../lib/motion';
@@ -11,6 +11,7 @@ const NAV = [
   { key: 'orders', Icon: ClipboardList, group: 'main' },
   { key: 'users', Icon: Users, group: 'main' },
   { key: 'wallets', Icon: Wallet, group: 'main' },
+  { key: 'treasury', Icon: Landmark, group: 'main' },
   { key: 'routes', Icon: Repeat, group: 'main' },
   { key: 'analytics', Icon: BarChart3, group: 'tools' },
   { key: 'support', Icon: LifeBuoy, group: 'tools' },

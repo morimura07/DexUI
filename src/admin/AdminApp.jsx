@@ -16,8 +16,9 @@ import Support    from './pages/Support';
 import Reviews    from './pages/Reviews';
 import Logs       from './pages/Logs';
 import Settings   from './pages/Settings';
+import Treasury   from './pages/Treasury';
 
-const PAGES = { dashboard: Dashboard, orders: Orders, users: Users, wallets: Wallets, routes: Routes, analytics: Analytics, support: Support, reviews: Reviews, logs: Logs, settings: Settings };
+const PAGES = { dashboard: Dashboard, orders: Orders, users: Users, wallets: Wallets, routes: Routes, analytics: Analytics, support: Support, reviews: Reviews, logs: Logs, settings: Settings, treasury: Treasury };
 
 // ── Mobile bottom nav (quick access) — the 5th button opens the full menu drawer ──
 const MOBILE_NAV = [

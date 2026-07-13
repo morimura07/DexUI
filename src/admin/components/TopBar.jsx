@@ -2,7 +2,7 @@ import { Menu } from 'lucide-react';
 import { useT, useI18n } from '../../lib/i18n';
 import { LANGS } from '../../lib/locales';
 
-const TABS = ['dashboard', 'orders', 'users', 'wallets', 'routes', 'analytics', 'support', 'reviews', 'logs', 'settings'];
+const TABS = ['dashboard', 'orders', 'users', 'wallets', 'treasury', 'routes', 'analytics', 'support', 'reviews', 'logs', 'settings'];
 
 export default function TopBar({ tab, onLogout, onMenuToggle }) {
   const t = useT();

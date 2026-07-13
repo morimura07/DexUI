@@ -75,6 +75,8 @@ function AuthHeader({ title, sub }) {
 export function Login() {
   const [email, setEmail]     = useState('');
   const [password, setPass]   = useState('');
+  const [totp, setTotp]       = useState('');
+  const [needTotp, setNeed]   = useState(false);   // server asked for a 2FA code
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
   const { login }   = useAuth();
@@ -85,9 +87,16 @@ export function Login() {
 
   const handleSubmit = async () => {
     if (!email||!password) { setError(t('auth.errors.fillAll')); return; }
+    if (needTotp && !totp) { setError('Enter your 6-digit code'); return; }
     setError(''); setLoading(true);
-    const res = await login(email, password);
+    const res = await login(email, password, totp || undefined);
     setLoading(false);
+
+    // Password was correct, but a second factor is required. Reveal the code
+    // field rather than showing a generic failure.
+    if (res.error?.code === 'TOTP_REQUIRED') { setNeed(true); setError(''); return; }
+    if (res.error?.code === 'TOTP_INVALID')  { setNeed(true); setError('That code is not valid. Try the current one.'); return; }
+
     if (res.success) {
       if (res.data?.user?.role === 'admin') {
         localStorage.setItem('ss_admin_token', res.data.token);
@@ -110,12 +119,23 @@ export function Login() {
           <Field label={t('auth.login.password')}>
             <PasswordInput value={password} onChange={e=>setPass(e.target.value)} placeholder="••••••••" />
           </Field>
+          {needTotp && (
+            <Field label="Authenticator code">
+              <Input
+                type="text"
+                value={totp}
+                autoFocus
+                onChange={e=>setTotp(e.target.value.replace(/\D/g,'').slice(0,8))}
+                placeholder="123456"
+              />
+            </Field>
+          )}
           {error && <Alert>{error}</Alert>}
           <div className="-mt-1 text-right">
             <Link to="/forgot-password" className="text-xs text-brand-fg hover:underline">{t('auth.login.forgot')}</Link>
           </div>
           <Button size="lg" type="submit" disabled={loading} className="py-3">
-            {loading ? t('auth.login.submitting') : t('auth.login.submit')}
+            {loading ? t('auth.login.submitting') : needTotp ? 'Verify code' : t('auth.login.submit')}
           </Button>
         </form>
         <div className="mt-5 text-center text-sm text-muted">
@@ -135,17 +155,22 @@ export function Register() {
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate     = useNavigate();
+  const [params]     = useSearchParams();
   const t            = useT();
   const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+
+  // Referral code: prefer ?ref= on this page, else one captured earlier while
+  // the visitor was browsing (AuthContext stashes it in localStorage).
+  const ref = (params.get('ref') || localStorage.getItem('ss_ref') || '').trim();
 
   const handleSubmit = async () => {
     if (!form.name||!form.email||!form.password) { setError(t('auth.errors.fillAll')); return; }
     if (form.password!==form.password_confirmation) { setError(t('auth.errors.passMismatch')); return; }
     if (form.password.length<8) { setError(t('auth.errors.passShort')); return; }
     setError(''); setLoading(true);
-    const res = await register(form);
+    const res = await register(ref ? { ...form, ref } : form);
     setLoading(false);
-    if (res.success) navigate('/login');
+    if (res.success) { localStorage.removeItem('ss_ref'); navigate('/login'); }
     else setError(res.error?.message||t('auth.errors.regFailed'));
   };
 
@@ -153,6 +178,12 @@ export function Register() {
     <AuthShell>
       <div className="w-full">
         <AuthHeader title={t('auth.register.title')} sub={t('auth.register.sub')} />
+        {ref && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-green/20 bg-green/10 px-3.5 py-2.5 text-[11.5px] text-green">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            <span>You were invited by a friend — you&apos;ll be linked to their referral.</span>
+          </div>
+        )}
         <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
           <Field label={t('auth.register.name')}>
             <Input value={form.name} onChange={set('name')} placeholder={t('auth.register.namePlaceholder')} />

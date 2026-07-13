@@ -29,18 +29,6 @@ function buildReserves(routes) {
   return [...seen.values()].sort((a, b) => b.amount - a.amount);
 }
 
-// Static stand-in, shown only until live routes arrive.
-const RESERVES_FALLBACK = [
-  { name: 'Tether TRC20', symbol: 'USDT', amount: 20814506 },
-  { name: 'Visa/MC UAH', symbol: 'UAH', amount: 4200000 },
-  { name: 'TRON', symbol: 'TRX', amount: 985000 },
-  { name: 'Ripple', symbol: 'XRP', amount: 95000 },
-  { name: 'Solana', symbol: 'SOL', amount: 340 },
-  { name: 'Monero', symbol: 'XMR', amount: 120.5 },
-  { name: 'Ethereum', symbol: 'ETH', amount: 48.21 },
-  { name: 'Bitcoin', symbol: 'BTC', amount: 2.543 },
-].map((r) => ({ ...r, token: null, xml: r.symbol }));
-
 function fmtReserve(n) {
   const v = num(n);
   if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
@@ -84,7 +72,7 @@ export default function About() {
   }, []);
 
   const reserves = useMemo(
-    () => (routes.length ? buildReserves(routes) : RESERVES_FALLBACK),
+    () => buildReserves(routes),
     [routes],
   );
   const maxReserve = reserves[0]?.amount || 1;
@@ -173,7 +161,8 @@ export default function About() {
         </div>
       </section>
 
-      {/* ── PROOF OF RESERVES ── */}
+      {/* ── PROOF OF RESERVES ── shown only when reserves are actually set ── */}
+      {reserves.length > 0 && (
       <section className="border-t border-border">
         <div className="mx-auto max-w-content px-6 py-16 md:px-8 lg:py-20">
           <SectionLabel n="01">{t('about.reserves.eyebrow')}</SectionLabel>
@@ -181,7 +170,7 @@ export default function About() {
             <h2 className="max-w-xl text-balance text-3xl font-light leading-tight text-fg md:text-4xl">
               {t('about.reserves.title')}
             </h2>
-            {routes.length > 0 && (
+            {reserves.length > 0 && (
               <span className="flex items-center gap-1.5 text-sm text-green">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />{t('about.reserves.liveBalances')}
               </span>
@@ -211,6 +200,7 @@ export default function About() {
           </p>
         </div>
       </section>
+      )}
 
       {/* ── DIRECTIONS EXPLORER ── */}
       <section id="directions" className="border-t border-border">
