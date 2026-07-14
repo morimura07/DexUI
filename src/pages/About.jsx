@@ -234,7 +234,7 @@ export default function About() {
               {t('about.directions.empty', { query: search })}
             </div>
           ) : (
-            <Reveal variant="fadeUp" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Reveal variant="fadeUp" amount={0.05} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((r, i) => (
                 <motion.button
                   {...lift}
