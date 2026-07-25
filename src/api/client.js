@@ -18,6 +18,23 @@ export async function apiCall(method, endpoint, data = null, auth = false) {
   } catch (e) { return { success: false, error: { message: e.message }, status: 0 }; }
 }
 
+// Multipart POST. apiCall() above hard-codes an application/json Content-Type and
+// JSON.stringify's the body, so a file can't travel through it. Deliberately does
+// NOT set Content-Type — the browser has to write its own multipart boundary, and
+// setting the header by hand omits it and the server parses nothing.
+export async function apiUpload(endpoint, formData) {
+  const headers = { 'Accept': 'application/json' };
+  const t = getToken();
+  if (t) headers['Authorization'] = `Bearer ${t}`;
+  try {
+    const res = await fetch(`${BASE}/${endpoint}`, { method: 'POST', headers, body: formData });
+    // An oversized upload is rejected by PHP before the app runs, so the body is an
+    // HTML error page, not JSON. Fall back to the status rather than throwing.
+    const json = await res.json().catch(() => ({ success: false, error: { message: `HTTP ${res.status}` } }));
+    return { ...json, status: res.status };
+  } catch (e) { return { success: false, error: { message: e.message }, status: 0 }; }
+}
+
 export async function fetchCryptoNews(query = 'cryptocurrency bitcoin', pageSize = 12) {
   try {
     const res = await apiCall('GET', 'public/news/crypto', { q: query, sort: 'publishedAt', pageSize });
@@ -91,6 +108,8 @@ export const api = {
   profileEditPassword: d => apiCall('PUT', 'user/profile/edit/password', d, true),
   profileEditPartnerLink: d => apiCall('PUT', 'user/profile/edit/partner-link', d, true),
   profileLimits: () => apiCall('GET', 'user/profile/limits/get', null, true),
+  kycStatus: () => apiCall('GET', 'user/profile/kyc/status', null, true),
+  kycSubmit: fd => apiUpload('user/profile/kyc/submit', fd),
   profileBlock: () => apiCall('PUT', 'user/profile/access/block', null, true),
   profileDelete: () => apiCall('DELETE', 'user/profile/access/delete', null, true),
   otpCreate: () => apiCall('POST', 'user/profile/secure/otp/create', null, true),

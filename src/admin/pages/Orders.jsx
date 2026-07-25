@@ -6,7 +6,7 @@ import Modal, { Field, Input, Select, BtnRow } from '../components/Modal';
 import { Reveal } from '../../lib/motion';
 import { useT } from '../../lib/i18n';
 
-const STATUSES = ['', 'WAIT_PAYMENT', 'UNDER_REVIEW', 'PAYMENT_RECEIVED', 'PROCESSING', 'COMPLETED', 'EXPIRED', 'CANCELLED', 'AML_HOLD'];
+const STATUSES = ['', 'WAIT_PAYMENT', 'UNDER_REVIEW', 'PAYMENT_RECEIVED', 'PROCESSING', 'COMPLETED', 'EXPIRED', 'CANCELLED', 'AML_HOLD', 'KYC_HOLD'];
 
 export default function Orders() {
   const t = useT();

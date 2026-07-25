@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { MessageCircle, Search, Loader2, CheckCircle2, Clock, XCircle, Check, ArrowLeft, ArrowRight, RefreshCw, ClipboardList, Copy, Share2, Wallet, Repeat } from 'lucide-react';
+import { MessageCircle, Search, Loader2, CheckCircle2, Clock, XCircle, Check, ArrowLeft, ArrowRight, RefreshCw, ClipboardList, Copy, Share2, Wallet, Repeat, ShieldAlert, ShieldCheck, Upload } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Panel, Button, SectionLabel, RingAccent } from '../components/ui/kit';
@@ -16,7 +16,7 @@ const badgeClass = s => ({
   UNDER_REVIEW:'bg-info/10 text-info',
   PROCESSING:'bg-info/10 text-info', COMPLETED:'bg-green/10 text-green',
   EXPIRED:'bg-red/10 text-red', CANCELLED:'bg-red/10 text-red',
-  AML_HOLD:'bg-hold/10 text-hold', REFUNDED:'bg-bg3 text-muted',
+  AML_HOLD:'bg-hold/10 text-hold', KYC_HOLD:'bg-hold/10 text-hold', REFUNDED:'bg-bg3 text-muted',
 }[s]||'bg-bg3 text-muted');
 
 const Badge = ({status}) => {
@@ -156,6 +156,7 @@ export function OrderPage() {
     if (s === 'COMPLETED') return [t('order.status.completed'), 'text-green'];
     if (s === 'EXPIRED') return [t('order.status.expired'), 'text-red'];
     if (s === 'CANCELLED') return [t('order.status.cancelled'), 'text-red'];
+    if (s === 'KYC_HOLD') return [t('order.status.awaitingVerification'), 'text-hold'];
     return [t('order.status.new'), 'text-brand-fg'];
   };
   const [statusWord, statusTone] = statusHeading();
@@ -316,6 +317,20 @@ export function OrderPage() {
             </div>
           )}
 
+          {/* KYC_HOLD — held for review, not rejected. Payment details stay hidden
+              (they're gated on WAIT_PAYMENT) until an admin approves and the
+              backend flips this order back on its own. */}
+          {order?.status === 'KYC_HOLD' && (
+            <div className="py-8 text-center">
+              <ShieldAlert className="mx-auto mb-4 h-11 w-11 text-hold" />
+              <div className="mb-3 text-xl font-light text-hold">{t('order.kycHold.title')}</div>
+              <p className="mx-auto mb-6 max-w-sm text-sm leading-relaxed text-muted">{t('order.kycHold.desc')}</p>
+              <Button onClick={() => navigate('/profile', { state: { tab: 'verification' } })} className="mx-auto">
+                {t('order.kycHold.verify')}
+              </Button>
+            </div>
+          )}
+
           {order?.status === 'COMPLETED' && (
             <div className="py-8 text-center">
               <CheckCircle2 className="mx-auto mb-4 h-11 w-11 text-green" />
@@ -366,7 +381,7 @@ export function MyOrders() {
   }, []);
 
   const TABS = [
-    { key:'CURRENT',   label:t('myOrders.tabs.current'),   statuses:['WAIT_PAYMENT','PAYMENT_RECEIVED','UNDER_REVIEW','PROCESSING','AML_HOLD'] },
+    { key:'CURRENT',   label:t('myOrders.tabs.current'),   statuses:['WAIT_PAYMENT','PAYMENT_RECEIVED','UNDER_REVIEW','PROCESSING','AML_HOLD','KYC_HOLD'] },
     { key:'COMPLETED', label:t('myOrders.tabs.completed'), statuses:['COMPLETED'] },
     { key:'CANCELLED', label:t('myOrders.tabs.cancelled'), statuses:['CANCELLED','EXPIRED','REFUNDED'] },
     { key:'ALL',       label:t('myOrders.tabs.all'), statuses:null },
@@ -385,7 +400,7 @@ export function MyOrders() {
   // Presentational only — renders one order card. Hover-lift via `lift`; the row's
   // click/navigation behaviour is unchanged.
   const renderCard = (o, i) => {
-    const isActive   = ['WAIT_PAYMENT','PAYMENT_RECEIVED','UNDER_REVIEW','PROCESSING','AML_HOLD'].includes(o.status);
+    const isActive   = ['WAIT_PAYMENT','PAYMENT_RECEIVED','UNDER_REVIEW','PROCESSING','AML_HOLD','KYC_HOLD'].includes(o.status);
     const isComplete = o.status === 'COMPLETED';
     return (
       <motion.div key={i} {...lift} onClick={()=>navigate(`/order/${o.order_id||o.id}`)}
@@ -542,6 +557,136 @@ const PStat = ({ label, value, tone = '' }) => (
     <div className={`text-sm font-semibold ${tone || 'text-fg'}`}>{value}</div>
   </div>
 );
+
+// ── KYC ──
+// The new /user/profile/kyc/* endpoints report NONE|PENDING|APPROVED|REJECTED.
+// The older /user/verification/* surface reports lowercase and uses "verified"
+// where the new one says "approved", so both are folded into one vocabulary.
+const KYC_STATES = ['NONE', 'PENDING', 'APPROVED', 'REJECTED'];
+const normKyc = s => {
+  const u = String(s || '').toUpperCase();
+  if (u === 'VERIFIED') return 'APPROVED';
+  return KYC_STATES.includes(u) ? u : 'NONE';
+};
+const DOC_TYPES = ['passport', 'national_id', 'drivers_license'];
+// PHP's default upload_max_filesize is 2 MB and rejects larger uploads before the
+// app sees them, which surfaces as a silent failure. Production is raised to 10 MB;
+// catching it here gives a real message instead of a mystery.
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
+
+function KycPanel({ state, submission, onSubmitted, toast }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [docType, setDoc] = useState(DOC_TYPES[0]);
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const pickFile = e => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > MAX_DOC_BYTES) {
+      toast('err', t('profile.kycPanel.tooLarge', { mb: Math.round(MAX_DOC_BYTES / 1024 / 1024) }));
+      e.target.value = '';
+      return setFile(null);
+    }
+    setFile(f);
+  };
+
+  const submit = async () => {
+    if (!name.trim()) return toast('err', t('profile.kycPanel.nameRequired'));
+    // Optional at the API level, but an admin can't review a submission without it.
+    if (!file) return toast('err', t('profile.kycPanel.fileRequired'));
+    setBusy(true);
+    const fd = new FormData();
+    fd.append('full_name', name.trim());
+    fd.append('document_type', docType);
+    fd.append('document', file);
+    const r = await api.kycSubmit(fd);
+    setBusy(false);
+    if (r?.success) {
+      toast('ok', r.data?.message || t('profile.kycPanel.submitted'));
+      setOpen(false); setName(''); setFile(null);
+      return onSubmitted();
+    }
+    if (r?.status === 409) { onSubmitted(); return toast('err', t('profile.kycPanel.alreadyPending')); }
+    if (r?.status === 422) return toast('err', t('profile.kycPanel.missingFields'));
+    toast('err', r?.error?.message || t('profile.kycPanel.failed'));
+  };
+
+  if (state === 'APPROVED') {
+    return (
+      <div className="flex items-start gap-2.5 text-sm text-green">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{t('profile.identity.verified')}</span>
+      </div>
+    );
+  }
+
+  if (state === 'PENDING') {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-start gap-2.5 text-sm text-muted">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-hold" />
+          <span>{t('profile.kycPanel.underReview')}</span>
+        </div>
+        {submission?.created_at && (
+          <div className="text-xs text-subtle">{t('profile.kycPanel.submittedOn', { date: fmtDate(submission.created_at) })}</div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {state === 'REJECTED' && (
+        <div className="rounded-xl border border-red/30 bg-red/5 p-3">
+          <div className="mb-1 text-xs font-semibold text-red">{t('profile.kycPanel.rejectedTitle')}</div>
+          <div className="text-xs leading-relaxed text-muted">
+            {submission?.review_note || t('profile.kycPanel.rejectedNoReason')}
+          </div>
+        </div>
+      )}
+
+      {!open ? (
+        <button onClick={() => setOpen(true)} className={btnGold}>
+          {state === 'REJECTED' ? t('profile.identity.resubmit') : t('profile.identity.start')}
+        </button>
+      ) : (
+        <div className="space-y-3">
+          <PInput label={t('profile.kycPanel.fullName')} value={name} onChange={e => setName(e.target.value)}
+            placeholder={t('profile.kycPanel.fullNamePlaceholder')} />
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted">{t('profile.kycPanel.docType')}</label>
+            <select value={docType} onChange={e => setDoc(e.target.value)}
+              className="w-full cursor-pointer rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm text-fg outline-none transition-colors focus:border-brand">
+              {DOC_TYPES.map(d => <option key={d} value={d}>{t(`profile.kycPanel.doc.${d}`)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted">{t('profile.kycPanel.document')}</label>
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-dashed border-border bg-bg px-3.5 py-3 text-sm transition-colors hover:border-brand">
+              <Upload className="h-4 w-4 shrink-0 text-subtle" />
+              <span className={`truncate ${file ? 'text-fg' : 'text-subtle'}`}>
+                {file ? file.name : t('profile.kycPanel.choose')}
+              </span>
+              <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={pickFile} className="hidden" />
+            </label>
+            <div className="mt-1.5 text-[11px] text-subtle">{t('profile.kycPanel.accepted', { mb: Math.round(MAX_DOC_BYTES / 1024 / 1024) })}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={submit} disabled={busy} className={`${btnGold} disabled:cursor-not-allowed disabled:opacity-60`}>
+              {busy ? t('profile.kycPanel.submitting') : t('profile.kycPanel.submit')}
+            </button>
+            <button onClick={() => { setOpen(false); setFile(null); }}
+              className="cursor-pointer border-none bg-transparent p-0 text-xs text-muted hover:text-fg">
+              {t('profile.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 const btnGold  = "cursor-pointer rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-h";
 const btnGhost = "cursor-pointer rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-fg transition-colors hover:border-brand hover:text-brand-fg";
 
@@ -550,11 +695,12 @@ export function Profile() {
   const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab]   = useState('profile');
+  // A KYC_HOLD order links straight here; honour the tab it asks for.
+  const [tab, setTab]   = useState(() => window.history.state?.usr?.tab || 'profile');
   const [loading, setL] = useState(true);
   const [u, setU]       = useState(null);
   const [limits, setLim]= useState(null);
-  const [vers, setVers] = useState([]);
+  const [kyc, setKyc]   = useState({ status: 'NONE', submission: null });
   const [bals, setBals] = useState([]);
   const [flash, setFlash] = useState(null);
 
@@ -572,8 +718,8 @@ export function Profile() {
 
   const load = async () => {
     setL(true);
-    const [p, l, v, b] = await Promise.allSettled([
-      api.profileGet(), api.profileLimits(), api.userVerificationGet(), api.walletsBalance(),
+    const [p, l, v, b, k] = await Promise.allSettled([
+      api.profileGet(), api.profileLimits(), api.userVerificationGet(), api.walletsBalance(), api.kycStatus(),
     ]);
     if (p.status === 'fulfilled' && p.value?.success) {
       const usr = p.value.data.user || {};
@@ -583,8 +729,19 @@ export function Profile() {
       setTwoFA(!!usr.two_factor_enabled);
     }
     if (l.status === 'fulfilled' && l.value?.success) setLim(l.value.data.limits || null);
-    if (v.status === 'fulfilled' && v.value?.success) setVers(v.value.data.verifications || []);
     if (b.status === 'fulfilled' && b.value?.success) setBals(b.value.data.balances || []);
+
+    // KYC state has three possible sources and they can disagree. /user/profile/kyc/status
+    // is authoritative; the limits payload carries the same field and is the next best
+    // thing; the older /user/verification/* surface is the last resort so an already-
+    // verified user is never shown as "not started" just because the new route 404s.
+    const kycFromNew    = k.status === 'fulfilled' && k.value?.success ? k.value.data : null;
+    const kycFromLimits = l.status === 'fulfilled' && l.value?.success ? l.value.data.limits?.kyc_status : null;
+    const kycFromOld    = v.status === 'fulfilled' && v.value?.success ? (v.value.data.verifications || [])[0]?.status : null;
+    setKyc({
+      status: normKyc(kycFromNew?.kyc_status ?? kycFromLimits ?? kycFromOld ?? 'NONE'),
+      submission: kycFromNew?.submission || null,
+    });
     setL(false);
   };
   useEffect(() => { load(); }, []);
@@ -641,13 +798,8 @@ export function Profile() {
   if (loading) return <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted">{t('profile.loading')}</div>;
 
   const display = u || authUser || {};
-  const verStatus = (vers[0]?.status || '').toLowerCase();
-  const kycState = vers.length === 0 ? 'none' : (verStatus || 'pending');
-  const kycLabel = kycState === 'none'
-    ? t('profile.kyc.notStarted')
-    : ['pending','approved','verified','rejected'].includes(kycState)
-      ? t(`profile.kyc.${kycState}`)
-      : kycState.charAt(0).toUpperCase() + kycState.slice(1);
+  const kycState = kyc.status;
+  const kycLabel = t(`profile.kyc.${{ NONE:'notStarted', PENDING:'pending', APPROVED:'approved', REJECTED:'rejected' }[kycState]}`);
 
   const TABS = [['profile',t('profile.tabs.profile')], ['security',t('profile.tabs.security')], ['verification',t('profile.tabs.verification')], ['wallets',t('profile.tabs.wallets')], ['danger',t('profile.tabs.danger')]];
 
@@ -707,7 +859,7 @@ export function Profile() {
           {tab === 'profile' && (
             <div className="space-y-4">
               <RevealGroup className="grid grid-cols-3 gap-3">
-                <RevealItem variant="scaleIn"><PStat label={t('profile.stat.verification')} value={kycLabel} tone={kycState === 'approved' || kycState === 'verified' ? 'text-green' : 'text-brand-fg'} /></RevealItem>
+                <RevealItem variant="scaleIn"><PStat label={t('profile.stat.verification')} value={kycLabel} tone={kycState === 'APPROVED' ? 'text-green' : kycState === 'REJECTED' ? 'text-red' : 'text-brand-fg'} /></RevealItem>
                 <RevealItem variant="scaleIn"><PStat label={t('profile.stat.twoFa')} value={twoFA ? t('profile.on') : t('profile.off')} tone={twoFA ? 'text-green' : 'text-muted'} /></RevealItem>
                 <RevealItem variant="scaleIn"><PStat label={t('profile.stat.wallets')} value={<CountUp value={bals.length} />} /></RevealItem>
               </RevealGroup>
@@ -726,6 +878,21 @@ export function Profile() {
                       <PBar label={t('profile.limits.monthly')} cur={limits.current_monthly} max={limits.monthly_limit} suffix=" USD" />
                       {limits.kyc_required_at && (
                         <div className="text-xs text-muted">{t('profile.limits.kycRequired', { amount: Number(limits.kyc_required_at).toLocaleString() })}</div>
+                      )}
+                      {/* Now that 30-day volume is real, warn before an order gets held
+                          rather than after. */}
+                      {kycState !== 'APPROVED' && Number(limits.current_monthly || 0) >= Number(limits.kyc_required_at || Infinity) && (
+                        <div className="rounded-xl border border-hold/30 bg-hold/5 p-3">
+                          <div className="mb-2 text-xs leading-relaxed text-muted">
+                            {kycState === 'PENDING' ? t('profile.limits.thresholdPending') : t('profile.limits.thresholdReached')}
+                          </div>
+                          {kycState !== 'PENDING' && (
+                            <button onClick={() => setTab('verification')}
+                              className="cursor-pointer border-none bg-transparent p-0 text-xs font-semibold text-brand-fg hover:underline">
+                              {t('profile.limits.verifyNow')}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   ) : <div className="text-sm text-muted">{t('profile.limits.unavailable')}</div>}
@@ -784,17 +951,9 @@ export function Profile() {
           {tab === 'verification' && (
             <div className="grid gap-4 md:grid-cols-2">
               <PCard title={t('profile.identity.title')}
-                action={<PChip ok={kycState === 'approved' || kycState === 'verified'} warn={kycState === 'pending' || kycState === 'none'} label={kycLabel} />}
+                action={<PChip ok={kycState === 'APPROVED'} warn={kycState === 'PENDING' || kycState === 'NONE'} label={kycLabel} />}
                 desc={t('profile.identity.desc')}>
-                {kycState === 'none' && <button onClick={() => navigate('/kyc')} className={btnGold}>{t('profile.identity.start')}</button>}
-                {kycState === 'pending' && <div className="text-sm text-muted">{t('profile.identity.pending')}</div>}
-                {(kycState === 'approved' || kycState === 'verified') && <div className="text-sm text-green">{t('profile.identity.verified')}</div>}
-                {kycState === 'rejected' && (
-                  <div className="space-y-3">
-                    <div className="text-sm text-red">{t('profile.identity.rejected')}</div>
-                    <button onClick={() => navigate('/kyc')} className={btnGold}>{t('profile.identity.resubmit')}</button>
-                  </div>
-                )}
+                <KycPanel state={kycState} submission={kyc.submission} onSubmitted={load} toast={toast} />
               </PCard>
               <PCard title={t('profile.emailCard.title')}
                 action={<PChip ok={!!display.email_verified} warn={!display.email_verified} label={display.email_verified ? t('profile.chip.verified') : t('profile.chip.unverified')} />}

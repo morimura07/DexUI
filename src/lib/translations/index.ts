@@ -10,6 +10,7 @@ import { legalPack } from './pages/legal'
 import { adminCorePack } from './pages/admin-core'
 import { adminBPack } from './pages/admin-b'
 import { adminCPack } from './pages/admin-c'
+import { adminKycPack } from './pages/admin-kyc'
 
 export type { Dictionary }
 export type LangCode = 'en' | 'zh' | 'ja' | 'ru'
@@ -36,6 +37,7 @@ const packs: Pack[] = [
   adminCorePack,
   adminBPack,
   adminCPack,
+  adminKycPack,
 ]
 
 function build(lang: LangCode): PartialDictionary {

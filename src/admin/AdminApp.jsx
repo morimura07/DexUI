@@ -17,8 +17,9 @@ import Reviews    from './pages/Reviews';
 import Logs       from './pages/Logs';
 import Settings   from './pages/Settings';
 import Treasury   from './pages/Treasury';
+import Kyc        from './pages/Kyc';
 
-const PAGES = { dashboard: Dashboard, orders: Orders, users: Users, wallets: Wallets, routes: Routes, analytics: Analytics, support: Support, reviews: Reviews, logs: Logs, settings: Settings, treasury: Treasury };
+const PAGES = { dashboard: Dashboard, orders: Orders, users: Users, wallets: Wallets, routes: Routes, analytics: Analytics, support: Support, reviews: Reviews, logs: Logs, settings: Settings, treasury: Treasury, kyc: Kyc };
 
 // ── Mobile bottom nav (quick access) — the 5th button opens the full menu drawer ──
 const MOBILE_NAV = [
